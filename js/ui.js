@@ -544,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnOptimize.addEventListener('click', runOptimization);
 
     // 6. Mostrar Resultados
-    function displayResults(results) {
+    function displayResults(results, preserveActiveSheet = false) {
         resultsSection.style.display = 'block';
 
         // Renderizar leyenda dinámica de grosores
@@ -620,8 +620,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Reiniciar paginación de planchas y visualización
-        activeSheetIndex = 0;
-        activeCutStepIndex = -1;
+        if (!preserveActiveSheet) {
+            activeSheetIndex = 0;
+            activeCutStepIndex = -1;
+        } else {
+            // Clamp activeSheetIndex to valid range in case sheets count changed
+            const currentGroup = results.groups[activeMaterialGroup];
+            const totalSheets = currentGroup ? currentGroup.sheets.length : 0;
+            if (activeSheetIndex >= totalSheets) {
+                activeSheetIndex = Math.max(0, totalSheets - 1);
+            }
+        }
         updateSheetNavigation();
         updateCutWizardUI();
 
@@ -935,7 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             totalGroovesLength: Math.round(totalGroovesLength * 10) / 10
         };
         
-        displayResults(optimizationResults);
+        displayResults(optimizationResults, true);
     }
     
     window.onCanvasPartModified = () => {

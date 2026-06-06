@@ -297,6 +297,12 @@ class CutMapCanvas {
     handleMouseMove(e) {
         if (!this.sheet) return;
         
+        // Don't show tooltip on hover if context menu is active to avoid overlapping clutter
+        if (document.getElementById('canvas-context-menu')) {
+            if (this.tooltipEl) this.tooltipEl.style.opacity = '0';
+            return;
+        }
+        
         const cRect = this.canvas.getBoundingClientRect();
         const width = this.wrapper.clientWidth;
         const height = this.wrapper.clientHeight;
@@ -386,7 +392,9 @@ class CutMapCanvas {
         // Show context menu if a part is clicked, hide otherwise
         if (clickedPart) {
             this.showContextMenu(clickedPart, clientX, clientY);
-            this.updateTooltip(clickedPart, null, clientX, clientY);
+            if (this.tooltipEl) {
+                this.tooltipEl.style.opacity = '0';
+            }
         } else if (clickedRect) {
             this.hideContextMenu();
             this.updateTooltip(null, clickedRect, clientX, clientY);
@@ -428,22 +436,22 @@ class CutMapCanvas {
             
             // Posicionar localmente respecto al contenedor wrapper
             const rect = this.wrapper.getBoundingClientRect();
-            let localX = clientX - rect.left + 15;
-            let localY = clientY - rect.top + 15;
-            
-            // Ajustar para evitar desborde fuera del wrapper
             const tooltipWidth = this.tooltipEl.offsetWidth || 220;
             const tooltipHeight = this.tooltipEl.offsetHeight || 150;
             
-            if (localX + tooltipWidth > this.wrapper.clientWidth) {
-                localX = clientX - rect.left - tooltipWidth - 15;
-            }
-            if (localY + tooltipHeight > this.wrapper.clientHeight) {
-                localY = clientY - rect.top - tooltipHeight - 15;
+            let localX = clientX - rect.left - (tooltipWidth / 2);
+            let localY;
+            
+            // Si el toque/click está en la mitad superior del wrapper, mostrar tooltip abajo para dejar espacio al menú contextual
+            if (clientY - rect.top < this.wrapper.clientHeight / 2) {
+                localY = clientY - rect.top + 95; // 95px abajo (el menú contextual mide aprox 84px de alto)
+            } else {
+                localY = clientY - rect.top - tooltipHeight - 15; // 15px arriba
             }
             
-            localX = Math.max(5, localX);
-            localY = Math.max(5, localY);
+            // Ajustar para evitar desborde fuera del wrapper
+            localX = Math.max(5, Math.min(localX, this.wrapper.clientWidth - tooltipWidth - 5));
+            localY = Math.max(5, Math.min(localY, this.wrapper.clientHeight - tooltipHeight - 5));
             
             this.tooltipEl.style.left = `${localX}px`;
             this.tooltipEl.style.top = `${localY}px`;
@@ -888,40 +896,59 @@ class CutMapCanvas {
     showContextMenu(part, clientX, clientY) {
         this.hideContextMenu();
         
+        const cantoDesc = [];
+        const labels = ["Canto Superior (L1)", "Canto Inferior (L2)", "Canto Izquierdo (A1)", "Canto Derecho (A2)"];
+        part.cantos.forEach((c, idx) => {
+            if (c === 1) cantoDesc.push(`${labels[idx]}: <strong>Delgado</strong>`);
+            if (c === 2) cantoDesc.push(`${labels[idx]}: <strong>Grueso</strong>`);
+        });
+
         const menu = document.createElement('div');
         menu.id = 'canvas-context-menu';
         menu.className = 'canvas-context-menu';
         
         const rect = this.wrapper.getBoundingClientRect();
-        let localX = clientX - rect.left;
-        let localY = clientY - rect.top;
         
-        // Clamp inside wrapper bounds to prevent clipping by overflow: hidden
-        const menuWidth = 140;
-        const menuHeight = 84;
+        // Clamp and position
+        const menuWidth = 240;
+        const menuHeight = 180;
         
-        if (localX + menuWidth > this.wrapper.clientWidth) {
-            localX = this.wrapper.clientWidth - menuWidth - 5;
+        let localX = clientX - rect.left - (menuWidth / 2);
+        let localY;
+        
+        // Position below or above clientY depending on coordinates inside wrapper
+        if (clientY - rect.top < this.wrapper.clientHeight / 2) {
+            localY = clientY - rect.top + 20; // 20px below selection point
+        } else {
+            localY = clientY - rect.top - menuHeight - 20; // 20px above selection point
         }
-        if (localY + menuHeight > this.wrapper.clientHeight) {
-            localY = this.wrapper.clientHeight - menuHeight - 5;
-        }
         
-        localX = Math.max(5, localX);
-        localY = Math.max(5, localY);
+        // Clamp within wrapper bounds
+        localX = Math.max(10, Math.min(localX, this.wrapper.clientWidth - menuWidth - 10));
+        localY = Math.max(10, Math.min(localY, this.wrapper.clientHeight - menuHeight - 10));
         
         menu.style.left = `${localX}px`;
         menu.style.top = `${localY}px`;
         
         menu.innerHTML = `
-            <button class="context-menu-item" id="ctx-rotate">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                Girar 90°
-            </button>
-            <button class="context-menu-item danger" id="ctx-remove">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                Quitar Pieza
-            </button>
+            <div class="canvas-context-menu-info">
+                <h4>${part.name}</h4>
+                <p>Medida Final: <strong>${part.largoNominal} x ${part.anchoNominal} mm</strong></p>
+                <p>Medida de Corte: <strong>${part.largo} x ${part.ancho} mm</strong></p>
+                <p>Veta (Giro): <strong>${part.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
+                <p>Rotado: <strong>${part.rotated ? 'Sí (90°)' : 'No'}</strong></p>
+                ${cantoDesc.length > 0 ? `<div class="cantos-info">${cantoDesc.join('<br>')}</div>` : ''}
+            </div>
+            <div class="canvas-context-menu-actions">
+                <button class="context-menu-item" id="ctx-rotate">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    Girar 90°
+                </button>
+                <button class="context-menu-item danger" id="ctx-remove">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    Quitar Pieza
+                </button>
+            </div>
         `;
         
         if (this.wrapper) {
@@ -930,14 +957,58 @@ class CutMapCanvas {
             document.body.appendChild(menu);
         }
         
+        // Stop all pointer/touch/mouse events from bubbling up to wrapper to prevent drag intervention
         menu.addEventListener('click', (e) => e.stopPropagation());
+        menu.addEventListener('mousedown', (e) => e.stopPropagation());
+        menu.addEventListener('touchstart', (e) => e.stopPropagation());
+        menu.addEventListener('touchmove', (e) => e.stopPropagation());
+        menu.addEventListener('touchend', (e) => e.stopPropagation());
         
-        document.getElementById('ctx-rotate').addEventListener('click', () => {
+        // Helper function to bind click/touch event handlers robustly on mobile and desktop
+        const bindButtonAction = (btn, action) => {
+            if (!btn) return;
+            let startX = 0;
+            let startY = 0;
+            let moveLimit = 10;
+            let isTouch = false;
+
+            btn.addEventListener('touchstart', (e) => {
+                isTouch = true;
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+            }, { passive: true });
+
+            btn.addEventListener('touchend', (e) => {
+                const touch = e.changedTouches[0];
+                const dx = touch.clientX - startX;
+                const dy = touch.clientY - startY;
+                const dist = Math.hypot(dx, dy);
+                if (dist < moveLimit) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    action();
+                }
+            });
+
+            btn.addEventListener('click', (e) => {
+                if (isTouch) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                action();
+            });
+        };
+
+        bindButtonAction(document.getElementById('ctx-rotate'), () => {
             this.rotatePartManually(part);
             this.hideContextMenu();
         });
         
-        document.getElementById('ctx-remove').addEventListener('click', () => {
+        bindButtonAction(document.getElementById('ctx-remove'), () => {
             this.removePartManually(part);
             this.hideContextMenu();
         });

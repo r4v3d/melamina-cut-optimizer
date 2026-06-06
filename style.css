@@ -1233,26 +1233,67 @@ input[type="color"].part-color::-webkit-color-swatch {
     font-weight: 600;
 }
 
-/* Floating Context Menu on Canvas */
+/* Floating Context Menu / Unified Detail Card on Canvas */
 .canvas-context-menu {
     position: absolute;
     background: rgba(15, 23, 42, 0.95);
     backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    padding: 0.25rem;
+    border-radius: 10px;
+    padding: 0.35rem;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.6);
     z-index: 1000;
-    min-width: 130px;
+    min-width: 180px;
+    max-width: 260px;
     animation: scaleUp 0.15s ease-out;
 }
 
 @keyframes scaleUp {
     from { transform: scale(0.95); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
+}
+
+.canvas-context-menu-info {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 6px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.canvas-context-menu-info h4 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    margin: 0 0 6px 0;
+    color: #f97316;
+    font-weight: 700;
+}
+
+.canvas-context-menu-info p {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 3px 0;
+    line-height: 1.25;
+}
+
+.canvas-context-menu-info strong {
+    color: #f8fafc;
+}
+
+.canvas-context-menu-info .cantos-info {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.15);
+    font-size: 0.7rem;
+    color: #cbd5e1;
+    line-height: 1.3;
+}
+
+.canvas-context-menu-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .context-menu-item {
@@ -1283,6 +1324,17 @@ input[type="color"].part-color::-webkit-color-swatch {
 .context-menu-item.danger:hover {
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
+}
+
+@media (max-width: 768px) {
+    .canvas-context-menu {
+        min-width: 200px;
+        padding: 0.45rem;
+    }
+    .context-menu-item {
+        padding: 0.65rem 0.85rem;
+        font-size: 0.85rem;
+    }
 }
 
 /* PRINT MEDIA STYLING (Extremely optimized for carpenters in workshop) */
