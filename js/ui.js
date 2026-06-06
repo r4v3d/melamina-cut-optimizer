@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnZoomIn = document.getElementById('btn-zoom-in');
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomReset = document.getElementById('btn-zoom-reset');
+    const btnFullscreenToggle = document.getElementById('btn-fullscreen-toggle');
     
     const selectMaterialGroup = document.getElementById('select-material-group');
     
@@ -698,6 +699,17 @@ document.addEventListener('DOMContentLoaded', () => {
     btnZoomIn.addEventListener('click', () => canvasController.zoom('in'));
     btnZoomOut.addEventListener('click', () => canvasController.zoom('out'));
     btnZoomReset.addEventListener('click', () => canvasController.zoom('reset'));
+    if (btnFullscreenToggle) {
+        btnFullscreenToggle.addEventListener('click', () => {
+            const container = document.querySelector('.canvas-container');
+            if (container) {
+                container.classList.toggle('fullscreen-map');
+                setTimeout(() => {
+                    canvasController.fitToScreen();
+                }, 80);
+            }
+        });
+    }
 
     // Helpers de Formato de Precios y Moneda
     function getCurrencySymbol(currency) {
