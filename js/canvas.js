@@ -162,11 +162,20 @@ class CutMapCanvas {
 
         // Touch support for mobile devices
         let touchStartDist = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTime = 0;
+        
         this.wrapper.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 this.isDragging = true;
                 this.startX = e.touches[0].clientX - this.panX;
                 this.startY = e.touches[0].clientY - this.panY;
+                
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                
                 e.preventDefault();
             } else if (e.touches.length === 2) {
                 touchStartDist = Math.hypot(
@@ -177,8 +186,20 @@ class CutMapCanvas {
             }
         }, { passive: false });
 
-        this.wrapper.addEventListener('touchend', () => {
-            this.isDragging = false;
+        this.wrapper.addEventListener('touchend', (e) => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                
+                // Detect tap: duration < 300ms and movement < 10px
+                const touchEndX = e.changedTouches[0]?.clientX || touchStartX;
+                const touchEndY = e.changedTouches[0]?.clientY || touchStartY;
+                const duration = Date.now() - touchStartTime;
+                const distance = Math.hypot(touchEndX - touchStartX, touchEndY - touchStartY);
+                
+                if (duration < 300 && distance < 10) {
+                    this.handleTap(touchEndX, touchEndY);
+                }
+            }
         });
 
         this.wrapper.addEventListener('touchmove', (e) => {
@@ -221,29 +242,7 @@ class CutMapCanvas {
 
         this.canvas.addEventListener('click', (e) => {
             if (this.isDragging) return;
-            
-            const cRect = this.canvas.getBoundingClientRect();
-            const mX = (e.clientX - cRect.left) * (this.wrapper.clientWidth / (cRect.width || this.wrapper.clientWidth));
-            const mY = (e.clientY - cRect.top) * (this.wrapper.clientHeight / (cRect.height || this.wrapper.clientHeight));
-            const virtualX = (mX - this.panX) / this.scale;
-            const virtualY = (mY - this.panY) / this.scale;
-            
-            let clickedPart = null;
-            if (this.sheet) {
-                for (const p of this.sheet.placedParts) {
-                    if (virtualX >= p.x && virtualX <= p.x + p.w &&
-                        virtualY >= p.y && virtualY <= p.y + p.h) {
-                        clickedPart = p;
-                        break;
-                    }
-                }
-            }
-            
-            if (clickedPart) {
-                this.showContextMenu(clickedPart, e.clientX, e.clientY);
-            } else {
-                this.hideContextMenu();
-            }
+            this.handleTap(e.clientX, e.clientY);
         });
 
         window.addEventListener('resize', () => {
@@ -340,6 +339,66 @@ class CutMapCanvas {
         }
         
         // Update tooltip
+        this.updateTooltip(foundPart, foundRect, e.clientX, e.clientY);
+    }
+
+    handleTap(clientX, clientY) {
+        if (!this.sheet) return;
+        
+        const cRect = this.canvas.getBoundingClientRect();
+        const width = this.wrapper.clientWidth;
+        const height = this.wrapper.clientHeight;
+        
+        const mX = (clientX - cRect.left) * (width / (cRect.width || width));
+        const mY = (clientY - cRect.top) * (height / (cRect.height || height));
+        
+        const virtualX = (mX - this.panX) / this.scale;
+        const virtualY = (mY - this.panY) / this.scale;
+        
+        let clickedPart = null;
+        let clickedRect = null;
+        
+        for (const p of this.sheet.placedParts) {
+            if (virtualX >= p.x && virtualX <= p.x + p.w &&
+                virtualY >= p.y && virtualY <= p.y + p.h) {
+                clickedPart = p;
+                break;
+            }
+        }
+        
+        if (!clickedPart) {
+            for (const r of this.sheet.freeRects) {
+                if (virtualX >= r.x && virtualX <= r.x + r.w &&
+                    virtualY >= r.y && virtualY <= r.y + r.h) {
+                    clickedRect = r;
+                    break;
+                }
+            }
+        }
+        
+        // Update hover states
+        if (this.hoveredPart !== clickedPart || this.hoveredRect !== clickedRect) {
+            this.hoveredPart = clickedPart;
+            this.hoveredRect = clickedRect;
+            this.render();
+        }
+        
+        // Show context menu if a part is clicked, hide otherwise
+        if (clickedPart) {
+            this.showContextMenu(clickedPart, clientX, clientY);
+            this.updateTooltip(clickedPart, null, clientX, clientY);
+        } else if (clickedRect) {
+            this.hideContextMenu();
+            this.updateTooltip(null, clickedRect, clientX, clientY);
+        } else {
+            this.hideContextMenu();
+            this.updateTooltip(null, null, clientX, clientY);
+        }
+    }
+
+    updateTooltip(foundPart, foundRect, clientX, clientY) {
+        if (!this.tooltipEl) return;
+        
         if (foundPart || foundRect) {
             if (foundPart) {
                 const cantoDesc = [];
@@ -369,18 +428,18 @@ class CutMapCanvas {
             
             // Posicionar localmente respecto al contenedor wrapper
             const rect = this.wrapper.getBoundingClientRect();
-            let localX = e.clientX - rect.left + 15;
-            let localY = e.clientY - rect.top + 15;
+            let localX = clientX - rect.left + 15;
+            let localY = clientY - rect.top + 15;
             
             // Ajustar para evitar desborde fuera del wrapper
             const tooltipWidth = this.tooltipEl.offsetWidth || 220;
             const tooltipHeight = this.tooltipEl.offsetHeight || 150;
             
             if (localX + tooltipWidth > this.wrapper.clientWidth) {
-                localX = e.clientX - rect.left - tooltipWidth - 15;
+                localX = clientX - rect.left - tooltipWidth - 15;
             }
             if (localY + tooltipHeight > this.wrapper.clientHeight) {
-                localY = e.clientY - rect.top - tooltipHeight - 15;
+                localY = clientY - rect.top - tooltipHeight - 15;
             }
             
             localX = Math.max(5, localX);
