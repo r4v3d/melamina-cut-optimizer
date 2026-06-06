@@ -858,6 +858,7 @@ body {
 }
 
 /* Responsive adjustments */
+/* Responsive adjustments */
 @media (max-width: 1024px) {
     .app-main-layout {
         grid-template-columns: 1fr;
@@ -874,18 +875,80 @@ body {
 }
 
 @media (max-width: 768px) {
-    .app-header {
-        flex-direction: column;
-        align-items: flex-start;
+    .app-container {
+        padding: 0.5rem;
         gap: 1rem;
     }
+
+    .app-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
     
+    .logo-area {
+        justify-content: center;
+    }
+
     .header-actions {
         width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
     
     .header-actions button {
         flex-grow: 1;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .sidebar-config {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .sidebar-config .glass-card {
+        flex: 1 1 100%;
+        padding: 1.25rem;
+    }
+
+    .parts-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .parts-quick-presets {
+        justify-content: space-between;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .parts-table th, .parts-table td {
+        padding: 0.5rem 0.35rem;
+    }
+
+    .parts-table .table-input {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.35rem;
+    }
+
+    .canto-config-grid {
+        gap: 0.15rem;
+    }
+
+    .canto-btn, .groove-btn {
+        width: 22px;
+        height: 22px;
+        font-size: 0.6rem;
     }
     
     .table-actions {
@@ -895,6 +958,80 @@ body {
     
     .table-actions button {
         width: 100%;
+    }
+
+    .canvas-container {
+        height: 380px;
+    }
+
+    .legend-area {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem 1rem;
+        padding: 0.5rem 0;
+    }
+
+    .legend-item {
+        font-size: 0.7rem;
+    }
+
+    .map-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .sheet-navigation {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .map-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .map-actions button {
+        flex: 1 1 45%;
+        font-size: 0.75rem;
+        padding: 0.4rem;
+    }
+
+    .sequence-wizard-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .unplaced-list {
+        gap: 0.5rem;
+    }
+
+    .unplaced-item {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header .logo-text h1 {
+        font-size: 1.25rem;
+    }
+
+    .legend-area {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
+    }
+
+    .groove-config-inputs .form-row {
+        gap: 0.4rem;
+    }
+
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .glass-card {
+        padding: 1rem;
     }
 }
 
