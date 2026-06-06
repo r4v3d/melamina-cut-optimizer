@@ -149,13 +149,15 @@ class CutMapCanvas {
                 this.isDragging = true;
                 this.startX = e.touches[0].clientX - this.panX;
                 this.startY = e.touches[0].clientY - this.panY;
+                e.preventDefault();
             } else if (e.touches.length === 2) {
                 touchStartDist = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
                     e.touches[0].clientY - e.touches[1].clientY
                 );
+                e.preventDefault();
             }
-        });
+        }, { passive: false });
 
         this.wrapper.addEventListener('touchend', () => {
             this.isDragging = false;
@@ -166,6 +168,7 @@ class CutMapCanvas {
                 this.panX = e.touches[0].clientX - this.startX;
                 this.panY = e.touches[0].clientY - this.startY;
                 this.render();
+                e.preventDefault();
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
@@ -173,10 +176,30 @@ class CutMapCanvas {
                 );
                 const ratio = dist / touchStartDist;
                 touchStartDist = dist;
+                
+                // Zoom center calculation for two fingers:
+                // Find midpoint of touches
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                
+                // Get virtual midpoint coordinates relative to wrapper before zoom
+                const rect = this.wrapper.getBoundingClientRect();
+                const relativeMidX = midX - rect.left;
+                const relativeMidY = midY - rect.top;
+                const virtualMidX = (relativeMidX - this.panX) / this.scale;
+                const virtualMidY = (relativeMidY - this.panY) / this.scale;
+                
+                // Adjust scale
                 this.scale = Math.max(0.1, Math.min(10.0, this.scale * ratio));
+                
+                // Re-calculate pan to zoom towards finger midpoint
+                this.panX = relativeMidX - virtualMidX * this.scale;
+                this.panY = relativeMidY - virtualMidY * this.scale;
+                
                 this.render();
+                e.preventDefault();
             }
-        });
+        }, { passive: false });
 
         this.canvas.addEventListener('click', (e) => {
             if (this.isDragging) return;

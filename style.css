@@ -964,6 +964,24 @@ body {
         height: 380px;
     }
 
+    .canvas-zoom-controls {
+        flex-direction: row;
+        bottom: 0.5rem;
+        right: 0.5rem;
+        padding: 0.35rem;
+        gap: 0.35rem;
+    }
+
+    .canvas-zoom-controls button {
+        width: 44px;
+        height: 44px;
+        font-size: 1.25rem;
+    }
+
+    #btn-zoom-reset {
+        font-size: 0.85rem;
+    }
+
     .legend-area {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
