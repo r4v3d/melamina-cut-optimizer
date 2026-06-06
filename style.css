@@ -226,6 +226,52 @@ body {
     box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
 }
 
+/* Input Groups for Currency Prefix */
+.input-group {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+}
+
+.input-group-text {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-input-muted);
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    padding: 0.625rem 0.75rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.input-group .form-input {
+    border-radius: 0 8px 8px 0 !important;
+}
+
+/* Custom styling for part color picker */
+input[type="color"].part-color {
+    padding: 0;
+    width: 100%;
+    height: 32px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+}
+
+input[type="color"].part-color::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+input[type="color"].part-color::-webkit-color-swatch {
+    border: none;
+    border-radius: 4px;
+}
+
 .form-select-sm {
     background-color: var(--bg-input);
     border: 1px solid var(--border-color);
@@ -471,6 +517,23 @@ body {
 
 .parts-table input[type="number"] {
     text-align: right;
+}
+
+/* Hide number input spinners in the parts table to save space */
+.parts-table input[type="number"]::-webkit-outer-spin-button,
+.parts-table input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.parts-table input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Optimize the quantity input column to prevent clipping high numbers */
+.parts-table .part-cant {
+    text-align: center !important;
+    padding-left: 0.2rem !important;
+    padding-right: 0.2rem !important;
 }
 
 .parts-table input[type="checkbox"] {

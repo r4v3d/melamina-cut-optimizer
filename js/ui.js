@@ -155,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.className = 'part-row';
         
         const name = partData.name || '';
+        const colorPalette = ["#06b6d4", "#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"];
+        const numRows = partsTbody ? partsTbody.querySelectorAll('.part-row').length : 0;
+        const color = partData.color || colorPalette[numRows % colorPalette.length];
         const material = partData.material || 'Estándar 18mm';
         const largo = partData.largo || '';
         const ancho = partData.ancho || '';
@@ -169,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = `
             <td class="row-num"></td>
             <td><input type="text" class="table-input part-name" placeholder="Ej. Lateral" value="${name}"></td>
+            <td><input type="color" class="table-input part-color" value="${color}" title="Elegir Color de la pieza"></td>
             <td>
                 <select class="table-input part-material" style="font-weight: 500;">
                     <option value="Estándar 18mm" ${material === 'Estándar 18mm' ? 'selected' : ''}>Estándar 18mm</option>
@@ -295,6 +299,41 @@ document.addEventListener('DOMContentLoaded', () => {
             saveStateToLocalStorage();
         });
 
+        // Cambiar color en tiempo real sin re-optimizar
+        const colorInput = tr.querySelector('.part-color');
+        if (colorInput) {
+            colorInput.addEventListener('input', () => {
+                const idx = Array.from(partsTbody.children).indexOf(tr);
+                if (optimizationResults && idx > -1) {
+                    const selectedColor = colorInput.value;
+                    for (const matName in optimizationResults.groups) {
+                        const group = optimizationResults.groups[matName];
+                        for (const sheet of group.sheets) {
+                            for (const p of sheet.placedParts) {
+                                if (p.originalIndex === idx) {
+                                    p.color = selectedColor;
+                                }
+                            }
+                        }
+                        for (const p of group.unplacedParts) {
+                            if (p.originalIndex === idx) {
+                                    p.color = selectedColor;
+                            }
+                        }
+                    }
+                    if (optimizationResults.unplacedParts) {
+                        for (const p of optimizationResults.unplacedParts) {
+                            if (p.originalIndex === idx) {
+                                p.color = selectedColor;
+                            }
+                        }
+                    }
+                    canvasController.render();
+                }
+                saveStateToLocalStorage();
+            });
+        }
+
         // Guardado automático ante cualquier cambio de valor
         tr.querySelectorAll('.table-input, input[type="checkbox"]').forEach(el => {
             el.addEventListener('change', () => {
@@ -350,6 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getRowData(rowEl) {
         const name = rowEl.querySelector('.part-name').value.trim();
+        const color = rowEl.querySelector('.part-color').value;
         const material = rowEl.querySelector('.part-material').value;
         const largo = parseFloat(rowEl.querySelector('.part-largo').value) || 0;
         const ancho = parseFloat(rowEl.querySelector('.part-ancho').value) || 0;
@@ -366,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
             grooves.push(btn.classList.contains('active') ? 1 : 0);
         });
 
-        return { name, material, largo, ancho, cant, veta, cantos, grooves };
+        return { name, color, material, largo, ancho, cant, veta, cantos, grooves };
     }
 
     function addNewRow(partData = {}) {
@@ -703,7 +743,18 @@ document.addEventListener('DOMContentLoaded', () => {
         btnFullscreenToggle.addEventListener('click', () => {
             const container = document.querySelector('.canvas-container');
             if (container) {
-                container.classList.toggle('fullscreen-map');
+                const isFullscreen = container.classList.toggle('fullscreen-map');
+                if (isFullscreen) {
+                    // Save original parent and next sibling to restore it later
+                    container._originalParent = container.parentElement;
+                    container._originalNextSibling = container.nextSibling;
+                    document.body.appendChild(container);
+                } else {
+                    // Restore to original parent and position
+                    if (container._originalParent) {
+                        container._originalParent.insertBefore(container, container._originalNextSibling);
+                    }
+                }
                 setTimeout(() => {
                     canvasController.fitToScreen();
                 }, 80);
@@ -739,12 +790,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const labelCantoDel = document.querySelector('label[for="input-costo-canto-del"]');
         const labelCantoGru = document.querySelector('label[for="input-costo-canto-gru"]');
         const labelRanura = document.querySelector('label[for="input-costo-ranura"]');
+        const labelManoObra = document.querySelector('label[for="input-costo-mano-obra"]');
+        const labelHerrajes = document.querySelector('label[for="input-costo-herrajes"]');
         
         if (labelPlancha) labelPlancha.textContent = `Costo Plancha (${symbol})`;
         if (labelCorte) labelCorte.textContent = `Corte /m (${symbol})`;
         if (labelCantoDel) labelCantoDel.textContent = `Canto Delg. /m (${symbol})`;
         if (labelCantoGru) labelCantoGru.textContent = `Canto Grues. /m (${symbol})`;
         if (labelRanura) labelRanura.textContent = `Ranura /m (${symbol})`;
+        if (labelManoObra) labelManoObra.textContent = `Mano de Obra (${symbol})`;
+        if (labelHerrajes) labelHerrajes.textContent = `Herrajes/Acc. (${symbol})`;
+        
+        // Update input prefix symbols
+        document.querySelectorAll('.currency-symbol').forEach(el => {
+            el.textContent = symbol;
+        });
     }
 
     // Recalcular presupuesto inmediatamente al cambiar los costos o la moneda

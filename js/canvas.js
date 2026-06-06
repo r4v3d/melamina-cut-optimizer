@@ -1,11 +1,27 @@
 // Renderizador del Mapa de Corte con HTML5 Canvas - MelaminaCut
 
+// Helper to convert HEX color to RGBA
+function hexToRgba(hex, alpha) {
+    if (!hex) return `rgba(6, 182, 212, ${alpha})`;
+    hex = hex.replace('#', '');
+    if (hex.length === 3) {
+        hex = hex.split('').map(char => char + char).join('');
+    }
+    const r = parseInt(hex.substring(0, 2), 16) || 6;
+    const g = parseInt(hex.substring(2, 4), 16) || 182;
+    const b = parseInt(hex.substring(4, 6), 16) || 212;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 class CutMapCanvas {
     constructor(canvasId, containerId) {
         this.canvas = document.getElementById(canvasId);
         if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d');
         this.wrapper = this.canvas.parentElement;
+        if (this.wrapper) {
+            this.wrapper.style.position = 'relative';
+        }
         
         this.sheet = null;
         this.scale = 1.0;
@@ -32,7 +48,6 @@ class CutMapCanvas {
             el = document.createElement('div');
             el.id = 'canvas-tooltip';
             el.className = 'canvas-tooltip-style';
-            document.body.appendChild(el);
             
             // Add CSS for tooltip to style.css or inject here dynamically
             const style = document.createElement('style');
@@ -84,6 +99,9 @@ class CutMapCanvas {
                 }
             `;
             document.head.appendChild(style);
+        }
+        if (this.wrapper) {
+            this.wrapper.appendChild(el);
         }
         return el;
     }
@@ -322,34 +340,54 @@ class CutMapCanvas {
         }
         
         // Update tooltip
-        if (foundPart) {
-            const cantoDesc = [];
-            const labels = ["Canto Superior (L1)", "Canto Inferior (L2)", "Canto Izquierdo (A1)", "Canto Derecho (A2)"];
-            foundPart.cantos.forEach((c, idx) => {
-                if (c === 1) cantoDesc.push(`${labels[idx]}: <strong>Delgado</strong>`);
-                if (c === 2) cantoDesc.push(`${labels[idx]}: <strong>Grueso</strong>`);
-            });
+        if (foundPart || foundRect) {
+            if (foundPart) {
+                const cantoDesc = [];
+                const labels = ["Canto Superior (L1)", "Canto Inferior (L2)", "Canto Izquierdo (A1)", "Canto Derecho (A2)"];
+                foundPart.cantos.forEach((c, idx) => {
+                    if (c === 1) cantoDesc.push(`${labels[idx]}: <strong>Delgado</strong>`);
+                    if (c === 2) cantoDesc.push(`${labels[idx]}: <strong>Grueso</strong>`);
+                });
+                
+                this.tooltipEl.innerHTML = `
+                    <h4>${foundPart.name}</h4>
+                    <p>Medida Final: <strong>${foundPart.largoNominal} x ${foundPart.anchoNominal} mm</strong></p>
+                    <p>Medida de Corte: <strong>${foundPart.largo} x ${foundPart.ancho} mm</strong></p>
+                    <p>Giro permitido (Veta): <strong>${foundPart.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
+                    <p>Rotado en corte: <strong>${foundPart.rotated ? 'Sí (90°)' : 'No'}</strong></p>
+                    ${cantoDesc.length > 0 ? `<p style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px;">${cantoDesc.join('<br>')}</p>` : ''}
+                `;
+            } else {
+                this.tooltipEl.innerHTML = `
+                    <h4>Sobrante Útil</h4>
+                    <p>Medidas: <strong>${Math.round(foundRect.w)} x ${Math.round(foundRect.h)} mm</strong></p>
+                    <p>Área: <strong>${Math.round((foundRect.w * foundRect.h) / 100) / 100} cm²</strong></p>
+                `;
+            }
+
+            this.tooltipEl.style.opacity = '1';
             
-            this.tooltipEl.innerHTML = `
-                <h4>${foundPart.name}</h4>
-                <p>Medida Final: <strong>${foundPart.largoNominal} x ${foundPart.anchoNominal} mm</strong></p>
-                <p>Medida de Corte: <strong>${foundPart.largo} x ${foundPart.ancho} mm</strong></p>
-                <p>Giro permitido (Veta): <strong>${foundPart.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
-                <p>Rotado en corte: <strong>${foundPart.rotated ? 'Sí (90°)' : 'No'}</strong></p>
-                ${cantoDesc.length > 0 ? `<p style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px;">${cantoDesc.join('<br>')}</p>` : ''}
-            `;
-            this.tooltipEl.style.opacity = '1';
-            this.tooltipEl.style.left = `${e.clientX + 15}px`;
-            this.tooltipEl.style.top = `${e.clientY + 15}px`;
-        } else if (foundRect) {
-            this.tooltipEl.innerHTML = `
-                <h4>Sobrante Útil</h4>
-                <p>Medidas: <strong>${Math.round(foundRect.w)} x ${Math.round(foundRect.h)} mm</strong></p>
-                <p>Área: <strong>${Math.round((foundRect.w * foundRect.h) / 100) / 100} cm²</strong></p>
-            `;
-            this.tooltipEl.style.opacity = '1';
-            this.tooltipEl.style.left = `${e.clientX + 15}px`;
-            this.tooltipEl.style.top = `${e.clientY + 15}px`;
+            // Posicionar localmente respecto al contenedor wrapper
+            const rect = this.wrapper.getBoundingClientRect();
+            let localX = e.clientX - rect.left + 15;
+            let localY = e.clientY - rect.top + 15;
+            
+            // Ajustar para evitar desborde fuera del wrapper
+            const tooltipWidth = this.tooltipEl.offsetWidth || 220;
+            const tooltipHeight = this.tooltipEl.offsetHeight || 150;
+            
+            if (localX + tooltipWidth > this.wrapper.clientWidth) {
+                localX = e.clientX - rect.left - tooltipWidth - 15;
+            }
+            if (localY + tooltipHeight > this.wrapper.clientHeight) {
+                localY = e.clientY - rect.top - tooltipHeight - 15;
+            }
+            
+            localX = Math.max(5, localX);
+            localY = Math.max(5, localY);
+            
+            this.tooltipEl.style.left = `${localX}px`;
+            this.tooltipEl.style.top = `${localY}px`;
         } else {
             this.tooltipEl.style.opacity = '0';
         }
@@ -424,12 +462,17 @@ class CutMapCanvas {
             ctx.setLineDash([]);
             
             // Draw dimension labels for larger free spaces
-            if (r.w > 120 && r.h > 80) {
-                ctx.fillStyle = isPrintMode ? '#64748b' : (isLightTheme ? '#475569' : 'rgba(148, 163, 184, 0.6)');
-                ctx.font = 'bold 10px sans-serif';
+            if (r.w > 60 && r.h > 40) {
+                const labelText = `Sobrante: ${Math.round(r.w)}x${Math.round(r.h)}`;
+                const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
+                let fontSize = Math.min(Math.round(r.h * 0.15), Math.round(r.w * 0.08));
+                fontSize = Math.min(Math.max(fontSize, 12), 24); // at least 12px, max 24px
+                
+                ctx.fillStyle = isPrintMode ? '#475569' : (isLightTheme ? '#475569' : 'rgba(255, 255, 255, 0.85)');
+                ctx.font = `bold ${fontSize}px ${fontStack}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(`Sobrante: ${Math.round(r.w)}x${Math.round(r.h)}`, r.x + r.w / 2, r.y + r.h / 2);
+                ctx.fillText(labelText, r.x + r.w / 2, r.y + r.h / 2, r.w - 8);
             }
         }
         
@@ -438,15 +481,16 @@ class CutMapCanvas {
             const isHovered = !isPrintMode && (this.hoveredPart === p);
             
             // Fill
+            const partColor = p.color || '#06b6d4';
             ctx.fillStyle = isPrintMode 
                 ? '#ffffff' 
                 : (isLightTheme 
-                    ? (isHovered ? 'rgba(6, 182, 212, 0.32)' : 'rgba(6, 182, 212, 0.15)')
-                    : (isHovered ? 'rgba(6, 182, 212, 0.28)' : 'rgba(6, 182, 212, 0.12)'));
+                    ? (isHovered ? hexToRgba(partColor, 0.75) : hexToRgba(partColor, 0.55))
+                    : (isHovered ? hexToRgba(partColor, 0.7) : hexToRgba(partColor, 0.5)));
             ctx.fillRect(p.x, p.y, p.w, p.h);
             
             // Border
-            ctx.strokeStyle = isPrintMode ? '#000000' : (isLightTheme ? 'rgba(8, 145, 178, 0.6)' : 'rgba(6, 182, 212, 0.5)');
+            ctx.strokeStyle = isPrintMode ? '#000000' : hexToRgba(partColor, 0.9);
             ctx.lineWidth = (isHovered && !isPrintMode) ? 2 : 1;
             ctx.strokeRect(p.x, p.y, p.w, p.h);
             
@@ -532,7 +576,6 @@ class CutMapCanvas {
     drawPartLabels(ctx, p, isPrintMode, isHovered) {
         const padding = 6;
         const textMaxWidth = p.w - padding * 2;
-        if (textMaxWidth <= 0) return;
         
         const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
         ctx.textBaseline = 'middle';
@@ -540,6 +583,93 @@ class CutMapCanvas {
         const isLightTheme = document.body.classList.contains('light-theme');
         const nameText = p.name;
         const dimText = `${p.largoNominal} x ${p.anchoNominal}`;
+
+        // Check if piece is vertical
+        const isVertical = p.h > p.w * 1.3;
+        
+        if (isVertical) {
+            ctx.save();
+            ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+            ctx.rotate(-Math.PI / 2); // Rotate 270 degrees (vertical running from bottom to top)
+            
+            const vertTextMaxWidth = p.h - padding * 2;
+            if (vertTextMaxWidth <= 0) {
+                ctx.restore();
+                return;
+            }
+            
+            // Check if we can fit 2 stacked lines in rotated context!
+            if (p.w >= 60 && p.h >= 130) {
+                let fontSize = Math.min(Math.round(p.w * 0.15), Math.round(p.h * 0.15));
+                fontSize = Math.min(Math.max(fontSize, 12), 32);
+                
+                ctx.textAlign = 'center';
+                
+                // Name
+                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
+                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
+                ctx.fillText(nameText, 0, -fontSize * 0.55, vertTextMaxWidth);
+                
+                // Dimensions
+                ctx.font = `600 ${Math.max(fontSize - 1, 11)}px ${fontStack}`;
+                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc';
+                ctx.fillText(dimText, 0, fontSize * 0.55, vertTextMaxWidth);
+            } 
+            // Otherwise draw single line vertically
+            else {
+                const separator = " - ";
+                let fontSize = Math.min(Math.round(p.w * 0.32), 26);
+                fontSize = Math.max(fontSize, 10);
+                
+                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
+                let nameWidth = ctx.measureText(nameText).width;
+                let sepWidth = ctx.measureText(separator).width;
+                ctx.font = `600 ${fontSize}px ${fontStack}`;
+                let dimWidth = ctx.measureText(dimText).width;
+                let totalWidth = nameWidth + sepWidth + dimWidth;
+                
+                if (totalWidth > vertTextMaxWidth) {
+                    fontSize = Math.floor(fontSize * (vertTextMaxWidth / totalWidth));
+                    ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
+                    nameWidth = ctx.measureText(nameText).width;
+                    sepWidth = ctx.measureText(separator).width;
+                    ctx.font = `600 ${fontSize}px ${fontStack}`;
+                    dimWidth = ctx.measureText(dimText).width;
+                    totalWidth = nameWidth + sepWidth + dimWidth;
+                }
+                
+                if (fontSize < 9 || p.h < 50) {
+                    // Draw fallback index vertically
+                    const indexFontSize = Math.min(Math.max(Math.round(p.w * 0.45), 8), 14);
+                    ctx.font = `bold ${indexFontSize}px ${fontStack}`;
+                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${p.originalIndex !== undefined ? p.originalIndex + 1 : ''}${p.rotated ? 'R' : ''}`, 0, 0, vertTextMaxWidth);
+                } else {
+                    let startX = -totalWidth / 2;
+                    
+                    // Name
+                    ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
+                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(nameText, startX, 0);
+                    
+                    // Separator
+                    ctx.fillStyle = isPrintMode ? '#64748b' : '#94a3b8';
+                    ctx.fillText(separator, startX + nameWidth, 0);
+                    
+                    // Dimensions
+                    ctx.font = `600 ${fontSize}px ${fontStack}`;
+                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc';
+                    ctx.fillText(dimText, startX + nameWidth + sepWidth, 0);
+                }
+            }
+            
+            ctx.restore();
+            return;
+        }
+
+        if (textMaxWidth <= 0) return;
         
         // 1. Tall and wide pieces: 2 stacked lines (Name and Nominal Dimensions in cyan/teal)
         if (p.h >= 130 && p.w >= 130) {
@@ -702,8 +832,27 @@ class CutMapCanvas {
         const menu = document.createElement('div');
         menu.id = 'canvas-context-menu';
         menu.className = 'canvas-context-menu';
-        menu.style.left = `${clientX}px`;
-        menu.style.top = `${clientY}px`;
+        
+        const rect = this.wrapper.getBoundingClientRect();
+        let localX = clientX - rect.left;
+        let localY = clientY - rect.top;
+        
+        // Clamp inside wrapper bounds to prevent clipping by overflow: hidden
+        const menuWidth = 140;
+        const menuHeight = 84;
+        
+        if (localX + menuWidth > this.wrapper.clientWidth) {
+            localX = this.wrapper.clientWidth - menuWidth - 5;
+        }
+        if (localY + menuHeight > this.wrapper.clientHeight) {
+            localY = this.wrapper.clientHeight - menuHeight - 5;
+        }
+        
+        localX = Math.max(5, localX);
+        localY = Math.max(5, localY);
+        
+        menu.style.left = `${localX}px`;
+        menu.style.top = `${localY}px`;
         
         menu.innerHTML = `
             <button class="context-menu-item" id="ctx-rotate">
@@ -716,7 +865,11 @@ class CutMapCanvas {
             </button>
         `;
         
-        document.body.appendChild(menu);
+        if (this.wrapper) {
+            this.wrapper.appendChild(menu);
+        } else {
+            document.body.appendChild(menu);
+        }
         
         menu.addEventListener('click', (e) => e.stopPropagation());
         

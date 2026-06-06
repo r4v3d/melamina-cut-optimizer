@@ -173,26 +173,41 @@
                     <div class="form-row">
                         <div class="form-group col-6">
                             <label for="input-costo-plancha">Costo Plancha</label>
-                            <input type="number" id="input-costo-plancha" class="form-input" value="120" min="0">
+                            <div class="input-group">
+                                <span class="input-group-text currency-symbol">S/.</span>
+                                <input type="number" id="input-costo-plancha" class="form-input" value="120" min="0">
+                            </div>
                         </div>
                         <div class="form-group col-6">
                             <label for="input-costo-corte">Corte /m</label>
-                            <input type="number" id="input-costo-corte" class="form-input" value="1.5" min="0" step="0.1">
+                            <div class="input-group">
+                                <span class="input-group-text currency-symbol">S/.</span>
+                                <input type="number" id="input-costo-corte" class="form-input" value="1.5" min="0" step="0.1">
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-6">
                             <label for="input-costo-canto-del">Canto Delg. /m</label>
-                            <input type="number" id="input-costo-canto-del" class="form-input" value="2.0" min="0" step="0.1">
+                            <div class="input-group">
+                                <span class="input-group-text currency-symbol">S/.</span>
+                                <input type="number" id="input-costo-canto-del" class="form-input" value="2.0" min="0" step="0.1">
+                            </div>
                         </div>
                         <div class="form-group col-6">
                             <label for="input-costo-canto-gru">Canto Grues. /m</label>
-                            <input type="number" id="input-costo-canto-gru" class="form-input" value="6.0" min="0" step="0.1">
+                            <div class="input-group">
+                                <span class="input-group-text currency-symbol">S/.</span>
+                                <input type="number" id="input-costo-canto-gru" class="form-input" value="6.0" min="0" step="0.1">
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
                         <label for="input-costo-ranura">Ranura /m</label>
-                        <input type="number" id="input-costo-ranura" class="form-input" value="3.0" min="0" step="0.1">
+                        <div class="input-group">
+                            <span class="input-group-text currency-symbol">S/.</span>
+                            <input type="number" id="input-costo-ranura" class="form-input" value="3.0" min="0" step="0.1">
+                        </div>
                     </div>
                     <!-- Cotización Comercial Avanzada -->
                     <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
@@ -200,11 +215,17 @@
                         <div class="form-row">
                             <div class="form-group col-6">
                                 <label for="input-costo-mano-obra">Mano de Obra</label>
-                                <input type="number" id="input-costo-mano-obra" class="form-input" value="0" min="0">
+                                <div class="input-group">
+                                    <span class="input-group-text currency-symbol">S/.</span>
+                                    <input type="number" id="input-costo-mano-obra" class="form-input" value="0" min="0">
+                                </div>
                             </div>
                             <div class="form-group col-6">
                                 <label for="input-costo-herrajes">Herrajes/Acc.</label>
-                                <input type="number" id="input-costo-herrajes" class="form-input" value="0" min="0">
+                                <div class="input-group">
+                                    <span class="input-group-text currency-symbol">S/.</span>
+                                    <input type="number" id="input-costo-herrajes" class="form-input" value="0" min="0">
+                                </div>
                             </div>
                         </div>
                         <div class="form-row">
@@ -267,13 +288,14 @@
                             <thead>
                                 <tr>
                                     <th width="4%">#</th>
-                                    <th width="18%">Nombre de la Pieza</th>
+                                    <th width="15%">Nombre de la Pieza</th>
+                                    <th width="6%">Color</th>
                                     <th width="15%">Material/Espesor</th>
                                     <th width="9%">Largo (mm)</th>
                                     <th width="9%">Ancho (mm)</th>
-                                    <th width="6%">Cant.</th>
-                                    <th width="6%" title="¿Respetar sentido de veta? Si se activa, no se rotará.">Veta</th>
-                                    <th width="17%" title="Selecciona qué lados llevan tapacanto">Tapacantos (L1|L2|A1|A2)</th>
+                                    <th width="5%">Cant.</th>
+                                    <th width="5%" title="¿Respetar sentido de veta? Si se activa, no se rotará.">Veta</th>
+                                    <th width="16%" title="Selecciona qué lados llevan tapacanto">Tapacantos (L1|L2|A1|A2)</th>
                                     <th width="12%" title="Selecciona qué lados llevan surco/ranura de fondo">Surcos (L1|L2|A1|A2)</th>
                                     <th width="4%"></th>
                                 </tr>

@@ -56,6 +56,7 @@ class CutOptimizer {
                     cantos: p.cantos ? [...p.cantos] : [0, 0, 0, 0],
                     grooves: p.grooves ? [...p.grooves] : [0, 0, 0, 0],
                     material: p.material || "Estándar 18mm",
+                    color: p.color || "#06b6d4",
                     originalIndex: p.index
                 });
             }
