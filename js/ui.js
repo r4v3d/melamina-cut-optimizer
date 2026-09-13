@@ -1,5 +1,14 @@
 // Controlador de Interfaz de Usuario (UI) - MelaminaCut
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Referencias DOM - Plancha
     const selectPlanchaPreset = document.getElementById('select-plancha-preset');
@@ -15,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkDescontarCanto = document.getElementById('check-descontar-canto');
     const checkTieneVeta = document.getElementById('check-tiene-veta');
     const selectMetodoCorte = document.getElementById('select-metodo-corte');
+    const checkPreferFence = document.getElementById('check-prefer-fence');
     
     // Referencias DOM - Tapacantos Custom
     const inputCantoDelgadoVal = document.getElementById('input-canto-delgado-val');
@@ -56,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const partsTbody = document.getElementById('parts-tbody');
     const btnAddRow = document.getElementById('btn-add-row');
     const btnOptimize = document.getElementById('btn-optimize');
+    const optimizeBtnDefaultHtml = btnOptimize ? btnOptimize.innerHTML : '';
     const btnClearAll = document.getElementById('btn-clear-all');
     const btnLoadPresetMueble = document.getElementById('btn-load-preset-mueble');
     
@@ -98,7 +109,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSeqPrev = document.getElementById('btn-seq-prev');
     const btnSeqNext = document.getElementById('btn-seq-next');
     const btnSeqReset = document.getElementById('btn-seq-reset');
+    const btnSeqDone = document.getElementById('btn-seq-done');
     const lblSeqStep = document.getElementById('lbl-seq-step');
+    const wizardOverlay = document.getElementById('cut-wizard-overlay');
+    const wizardOverlayText = document.getElementById('cut-wizard-overlay-text');
+    const btnOverlayPrev = document.getElementById('btn-overlay-prev');
+    const btnOverlayNext = document.getElementById('btn-overlay-next');
+    const btnOverlayDone = document.getElementById('btn-overlay-done');
+    const sequenceStaleBanner = document.getElementById('sequence-stale-banner');
+    const CUT_PROGRESS_KEY = 'melaminacut_cut_progress';
     
     // Inicializar Canvas
     const canvasController = new CutMapCanvas('cut-map-canvas', 'cut-map-canvas');
@@ -106,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeSheetIndex = 0;
     let activeMaterialGroup = ""; // Grupo de material seleccionado actualmente
     let activeCutStepIndex = -1; // Corte resaltado actualmente (-1 = ninguno)
+    let printReportDirty = true;
+    let optimizeGeneration = 0;
 
     // 1. Cargar Presets de Planchas en el select
     PLANCHA_PRESETS.forEach(p => {
@@ -150,6 +171,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 3. Gestión de Filas de la Tabla
+    function getMaterialOptions(selected) {
+        const options = new Set(['Estándar 18mm', 'MDF Fondo 3mm', 'Roble 18mm']);
+        const sheetMat = (inputMaterial.value || '').trim();
+        if (sheetMat) options.add(sheetMat);
+        if (selected) options.add(selected);
+        if (partsTbody) {
+            partsTbody.querySelectorAll('.part-material').forEach(sel => {
+                if (sel.value) options.add(sel.value);
+            });
+        }
+        return Array.from(options);
+    }
+
     function createRowDOM(partData = {}) {
         const tr = document.createElement('tr');
         tr.className = 'part-row';
@@ -158,7 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const colorPalette = ["#06b6d4", "#3b82f6", "#f97316", "#8b5cf6", "#10b981", "#ec4899", "#f59e0b"];
         const numRows = partsTbody ? partsTbody.querySelectorAll('.part-row').length : 0;
         const color = partData.color || colorPalette[numRows % colorPalette.length];
-        const material = partData.material || 'Estándar 18mm';
+        const material = partData.material || (inputMaterial.value || '').trim() || 'Estándar 18mm';
+        const materialOptions = getMaterialOptions(material);
         const largo = partData.largo || '';
         const ancho = partData.ancho || '';
         const cant = partData.cant || 1;
@@ -169,15 +204,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // grooves: [L1, L2, A1, A2] -> 0: No, 1: Sí
         const grooves = partData.grooves ? [...partData.grooves] : [0, 0, 0, 0];
 
+        const materialOptionsHtml = materialOptions.map(mat =>
+            `<option value="${escapeHtml(mat)}" ${mat === material ? 'selected' : ''}>${escapeHtml(mat)}</option>`
+        ).join('');
+
         tr.innerHTML = `
             <td class="row-num"></td>
-            <td><input type="text" class="table-input part-name" placeholder="Ej. Lateral" value="${name}"></td>
-            <td><input type="color" class="table-input part-color" value="${color}" title="Elegir Color de la pieza"></td>
+            <td><input type="text" class="table-input part-name" placeholder="Ej. Lateral" value="${escapeHtml(name)}"></td>
+            <td><input type="color" class="table-input part-color" value="${escapeHtml(color)}" title="Elegir Color de la pieza"></td>
             <td>
                 <select class="table-input part-material" style="font-weight: 500;">
-                    <option value="Estándar 18mm" ${material === 'Estándar 18mm' ? 'selected' : ''}>Estándar 18mm</option>
-                    <option value="MDF Fondo 3mm" ${material === 'MDF Fondo 3mm' ? 'selected' : ''}>MDF Fondo 3mm</option>
-                    <option value="Roble 18mm" ${material === 'Roble 18mm' ? 'selected' : ''}>Roble 18mm</option>
+                    ${materialOptionsHtml}
                 </select>
             </td>
             <td><input type="number" class="table-input part-largo" placeholder="0" value="${largo}" min="10"></td>
@@ -338,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.querySelectorAll('.table-input, input[type="checkbox"]').forEach(el => {
             el.addEventListener('change', () => {
                 saveStateToLocalStorage();
+                applyRowWarnings();
             });
         });
 
@@ -349,14 +387,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function applyCantoState(button, state) {
         button.setAttribute('data-state', state);
         button.classList.remove('delgado', 'grueso');
-        
+
+        const titles = {
+            '0': 'Largo Superior (L1)',
+            '1': 'Largo Inferior (L2)',
+            '2': 'Ancho Izquierdo (A1)',
+            '3': 'Ancho Derecho (A2)'
+        };
+        let title = titles[button.getAttribute('data-edge')] || button.textContent;
+
         if (state === 1) {
             button.classList.add('delgado');
-            button.title += " [Delgado]";
+            title += ' [Delgado]';
         } else if (state === 2) {
             button.classList.add('grueso');
-            button.title += " [Grueso]";
+            title += ' [Grueso]';
         }
+        button.title = title;
     }
 
     function updatePrintLabels(rowEl) {
@@ -407,6 +454,125 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         return { name, color, material, largo, ancho, cant, veta, cantos, grooves };
+    }
+
+    function physicalCutSize(data) {
+        let largo = data.largo;
+        let ancho = data.ancho;
+        if (checkDescontarCanto.checked) {
+            const d = parseFloat(inputCantoDelgadoVal.value) || 0.4;
+            const g = parseFloat(inputCantoGruesoVal.value) || 2;
+            const esp = [0, d, g];
+            largo -= (esp[data.cantos[2] || 0] + esp[data.cantos[3] || 0]);
+            ancho -= (esp[data.cantos[0] || 0] + esp[data.cantos[1] || 0]);
+        }
+        return { largo, ancho };
+    }
+
+    function applyRowWarnings(rawParts) {
+        const rows = partsTbody.querySelectorAll('.part-row');
+        const usableW = (parseFloat(inputLargo.value) || 0) - 2 * (parseFloat(inputRefilado.value) || 0);
+        const usableH = (parseFloat(inputAncho.value) || 0) - 2 * (parseFloat(inputRefilado.value) || 0);
+        const vetaOn = checkTieneVeta.checked;
+
+        rows.forEach((row) => {
+            row.classList.remove('row-warn', 'row-error');
+            const existing = row.querySelector('.row-warning');
+            if (existing) existing.remove();
+            const data = getRowData(row);
+            if (!(data.largo > 0 && data.ancho > 0 && data.cant > 0)) return;
+
+            const phys = physicalCutSize(data);
+            const msgs = [];
+            let error = false;
+            if (phys.largo <= 0 || phys.ancho <= 0) {
+                msgs.push('Corte ≤ 0 mm tras tapacanto');
+                error = true;
+            }
+            const fitsAsIs = phys.largo <= usableW + 0.2 && phys.ancho <= usableH + 0.2;
+            const fitsRot = phys.ancho <= usableW + 0.2 && phys.largo <= usableH + 0.2;
+            if (!error && !fitsAsIs && !fitsRot) {
+                msgs.push('Mayor que el útil de plancha');
+                error = true;
+            } else if (!error && !fitsAsIs && fitsRot) {
+                msgs.push(vetaOn && data.veta
+                    ? 'No cabe con veta: desactive veta o rote la pieza'
+                    : 'Cabe si se rota');
+            }
+            if (data.cant > 200) msgs.push('Cantidad alta (>200)');
+
+            if (msgs.length) {
+                row.classList.add(error ? 'row-error' : 'row-warn');
+                const nameCell = row.querySelector('.part-name')?.closest('td') || row.cells[1];
+                const warn = document.createElement('span');
+                warn.className = 'row-warning';
+                warn.textContent = msgs.join(' · ');
+                nameCell.appendChild(warn);
+            }
+        });
+        void rawParts;
+    }
+
+    function confirmWorkshopParams(rawParts) {
+        const kerf = parseFloat(inputSierra.value) || 0;
+        const refilado = parseFloat(inputRefilado.value) || 0;
+        const totalQty = rawParts.reduce((s, p) => s + (p.cant || 0), 0);
+        if (kerf > 8 && !confirm(`El kerf es ${kerf} mm (mayor a 8 mm). ¿Continuar?`)) return false;
+        if (refilado > 20 && !confirm(`El refilado es ${refilado} mm (mayor a 20 mm). ¿Continuar?`)) return false;
+        if (totalQty > 200 && !confirm(`Hay ${totalQty} piezas (>200). El cálculo puede tardar. ¿Continuar?`)) return false;
+        return true;
+    }
+
+    function updateWorkshopChecklist() {
+        const vetaEl = document.getElementById('chk-veta-state');
+        const cantoEl = document.getElementById('chk-canto-state');
+        if (vetaEl) {
+            vetaEl.textContent = `Veta global: ${checkTieneVeta.checked ? 'ON' : 'OFF'}`;
+            vetaEl.classList.toggle('is-on', checkTieneVeta.checked);
+        }
+        if (cantoEl) {
+            cantoEl.textContent = `Descontar canto: ${checkDescontarCanto.checked ? 'ON' : 'OFF'}`;
+            cantoEl.classList.toggle('is-on', checkDescontarCanto.checked);
+        }
+    }
+
+    function cutKindLabel(cut) {
+        if (cut.kind === 'raja') return 'Raja';
+        if (cut.kind === 'traza') return 'Traza';
+        return cut.level === 1 ? 'Raja' : 'Traza';
+    }
+
+    function sheetProgressKey(mat, sheet) {
+        const fences = (sheet.cuts || []).map(c => Math.round(c.fenceMm || 0)).join('-');
+        return `${mat}|${sheet.id}|${(sheet.cuts || []).length}|${fences}`;
+    }
+
+    function loadCutProgress(mat, sheet) {
+        try {
+            const all = JSON.parse(localStorage.getItem(CUT_PROGRESS_KEY) || '{}');
+            const v = all[sheetProgressKey(mat, sheet)];
+            return typeof v === 'number' ? v : -1;
+        } catch (e) {
+            return -1;
+        }
+    }
+
+    function saveCutProgress(mat, sheet, doneIdx) {
+        try {
+            const all = JSON.parse(localStorage.getItem(CUT_PROGRESS_KEY) || '{}');
+            all[sheetProgressKey(mat, sheet)] = doneIdx;
+            localStorage.setItem(CUT_PROGRESS_KEY, JSON.stringify(all));
+        } catch (e) { /* ignore quota */ }
+    }
+
+    function anySequenceStale() {
+        if (!optimizationResults) return false;
+        for (const mat of Object.keys(optimizationResults.groups || {})) {
+            for (const sheet of optimizationResults.groups[mat].sheets || []) {
+                if (sheet.sequenceStale) return true;
+            }
+        }
+        return false;
     }
 
     function addNewRow(partData = {}) {
@@ -483,17 +649,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function runOptimization() {
         const rows = partsTbody.querySelectorAll('.part-row');
         const rawParts = [];
-        let index = 0;
 
-        rows.forEach(row => {
+        rows.forEach((row, rowIdx) => {
             const data = getRowData(row);
             if (data.largo > 0 && data.ancho > 0 && data.cant > 0) {
                 rawParts.push({
                     ...data,
-                    id: `p${index}`,
-                    index: index
+                    id: `p${rowIdx}`,
+                    index: rowIdx
                 });
-                index++;
             }
         });
 
@@ -502,7 +666,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Crear optimizador con configuración extendida de SketchCut PRO
+        applyRowWarnings(rawParts);
+        if (!confirmWorkshopParams(rawParts)) return;
+
         const opt = new CutOptimizer({
             planchaLargo: parseFloat(inputLargo.value),
             planchaAncho: parseFloat(inputAncho.value),
@@ -511,34 +677,55 @@ document.addEventListener('DOMContentLoaded', () => {
             descontarCanto: checkDescontarCanto.checked,
             tieneVetaGlobal: checkTieneVeta.checked,
             metodoCorte: selectMetodoCorte.value,
+            preferFewerFenceChanges: !!(checkPreferFence && checkPreferFence.checked),
             cantoDelgadoEspesor: parseFloat(inputCantoDelgadoVal.value) || 0.4,
             cantoGruesoEspesor: parseFloat(inputCantoGruesoVal.value) || 2.0
         });
 
-        try {
-            optimizationResults = opt.optimize(rawParts);
-            
-            // Actualizar selector de grupos de materiales
-            selectMaterialGroup.innerHTML = '';
-            const materialKeys = Object.keys(optimizationResults.groups);
-            materialKeys.forEach(key => {
-                const optEl = document.createElement('option');
-                optEl.value = key;
-                optEl.textContent = key;
-                selectMaterialGroup.appendChild(optEl);
-            });
-            
-            // Establecer grupo de material activo por defecto
-            if (materialKeys.length > 0) {
-                activeMaterialGroup = materialKeys[0];
-            } else {
-                activeMaterialGroup = "Estándar 18mm";
+        const gen = ++optimizeGeneration;
+        btnOptimize.disabled = true;
+        btnOptimize.classList.add('is-busy');
+        btnOptimize.innerHTML = '<span>Optimizando…</span>';
+
+        const finishOptimize = () => {
+            if (gen !== optimizeGeneration) return;
+            btnOptimize.disabled = false;
+            btnOptimize.classList.remove('is-busy');
+            btnOptimize.innerHTML = optimizeBtnDefaultHtml;
+        };
+
+        // Cede un frame para que el botón muestre el estado de carga
+        requestAnimationFrame(() => {
+            if (gen !== optimizeGeneration) return;
+            try {
+                const results = opt.optimize(rawParts);
+                if (gen !== optimizeGeneration) return;
+                optimizationResults = results;
+
+                selectMaterialGroup.innerHTML = '';
+                const materialKeys = Object.keys(optimizationResults.groups);
+                materialKeys.forEach(key => {
+                    const optEl = document.createElement('option');
+                    optEl.value = key;
+                    optEl.textContent = key;
+                    selectMaterialGroup.appendChild(optEl);
+                });
+
+                if (materialKeys.length > 0) {
+                    activeMaterialGroup = materialKeys[0];
+                } else {
+                    activeMaterialGroup = "Estándar 18mm";
+                }
+
+                displayResults(optimizationResults);
+            } catch (err) {
+                if (gen === optimizeGeneration) {
+                    alert(`Error de optimización: ${err.message}`);
+                }
+            } finally {
+                finishOptimize();
             }
-            
-            displayResults(optimizationResults);
-        } catch (err) {
-            alert(`Error de optimización: ${err.message}`);
-        }
+        });
     }
 
     btnOptimize.addEventListener('click', runOptimization);
@@ -559,6 +746,24 @@ document.addEventListener('DOMContentLoaded', () => {
         valMetrosCorte.textContent = `${results.metrics.totalCutsLength} m`;
         valNumCortes.textContent = results.metrics.totalCutsCount;
         valMetrosRanura.textContent = `${results.metrics.totalGroovesLength} m`;
+
+        const valSobrante = document.getElementById('val-sobrante');
+        const valMerma = document.getElementById('val-merma');
+        const strategyNote = document.getElementById('opt-strategy-note');
+        if (valSobrante) {
+            valSobrante.textContent = `${results.metrics.leftoverAreaM2 || 0} m²`;
+        }
+        if (valMerma) {
+            valMerma.textContent = `${results.metrics.wastePercent || 0}%`;
+        }
+        if (strategyNote) {
+            const tried = results.metrics.strategiesTried || 0;
+            const winner = results.metrics.winningStrategy;
+            strategyNote.textContent = tried > 1 && winner
+                ? `Mejor de ${tried} layouts`
+                : '';
+            strategyNote.title = winner || '';
+        }
 
         // Cotizar Presupuesto Estimado con cargos adicionales
         const costoPlancha = parseFloat(inputCostoPlancha.value) || 0;
@@ -605,12 +810,19 @@ document.addEventListener('DOMContentLoaded', () => {
             unplacedCount.textContent = results.unplacedParts.length;
             
             results.unplacedParts.forEach(p => {
+                const reasonMap = {
+                    too_large: 'No cabe en la plancha (ni rotada)',
+                    invalid_size: 'Medida de corte inválida (revise tapacantos)',
+                    no_space: 'Sin espacio residual suficiente (kerf)'
+                };
+                const reason = reasonMap[p.unplacedReason] || 'No se pudo colocar';
                 const card = document.createElement('div');
                 card.className = 'unplaced-item';
                 card.innerHTML = `
                     <div class="unplaced-item-info">
-                        <span class="unplaced-item-name">${p.name}</span>
-                        <span class="unplaced-item-size">${p.largoNominal} x ${p.anchoNominal} mm (${p.material})</span>
+                        <span class="unplaced-item-name">${escapeHtml(p.name)}</span>
+                        <span class="unplaced-item-size">${p.largoNominal} x ${p.anchoNominal} mm (${escapeHtml(p.material)})</span>
+                        <span class="unplaced-item-size">${escapeHtml(reason)}</span>
                     </div>
                 `;
                 unplacedListEl.appendChild(card);
@@ -633,52 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateSheetNavigation();
         updateCutWizardUI();
-
-        // Generar reporte de impresión de todas las planchas
-        const printAllSheetsEl = document.getElementById('print-report-all-sheets');
-        if (printAllSheetsEl) {
-            printAllSheetsEl.innerHTML = '';
-            
-            for (const matName in results.groups) {
-                const group = results.groups[matName];
-                group.sheets.forEach((sheet, idx) => {
-                    const section = document.createElement('div');
-                    section.className = 'print-sheet-section';
-                    
-                    canvasController.setSheet(sheet);
-                    const highResUrl = canvasController.getHighResDataURL(3000);
-                    
-                    let cutsHtml = '';
-                    if (sheet.cuts.length === 0) {
-                        cutsHtml = '<li>No se requieren cortes para esta plancha.</li>';
-                    } else {
-                        const sortedCuts = [...sheet.cuts].sort((a, b) => a.level - b.level);
-                        sortedCuts.forEach((cut, cIdx) => {
-                            cutsHtml += `<li><strong>Paso ${cIdx + 1} (${cut.level === 1 ? 'Corte Primario' : 'Corte Secundario'}):</strong> ${cut.desc}.</li>`;
-                        });
-                    }
-                    
-                    section.innerHTML = `
-                        <h3 class="card-title" style="margin-top: 1.5cm; margin-bottom: 0.5cm;">Plano de Corte - ${matName} - Plancha ${idx + 1} de ${group.sheets.length}</h3>
-                        <div class="print-sheet-img-container">
-                            <img class="print-sheet-img" src="${highResUrl || ''}" />
-                        </div>
-                        <div class="glass-card cut-sequence-card" style="border: none !important; border-bottom: 1px solid #cbd5e1 !important; margin-top: 0.5cm; padding-bottom: 0.5cm !important;">
-                            <h4 style="font-size: 11pt; margin-bottom: 0.3cm; font-weight: bold; color: #000;">Secuencia de Cortes Sugerida (Plancha ${idx + 1})</h4>
-                            <ol class="sequence-list" style="color: #000 !important; font-size: 9pt; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                ${cutsHtml}
-                            </ol>
-                        </div>
-                    `;
-                    printAllSheetsEl.appendChild(section);
-                });
-            }
-            
-            // Restaurar visualización en canvas
-            if (results.groups[activeMaterialGroup] && results.groups[activeMaterialGroup].sheets[activeSheetIndex]) {
-                canvasController.setSheet(results.groups[activeMaterialGroup].sheets[activeSheetIndex]);
-            }
-        }
+        printReportDirty = true;
     }
 
     // Navegación de planchas
@@ -700,33 +867,40 @@ document.addEventListener('DOMContentLoaded', () => {
         btnNextSheet.disabled = (activeSheetIndex === totalSheets - 1);
         
         canvasController.setSheet(currentGroup.sheets[activeSheetIndex]);
-        renderCutSequence(currentGroup.sheets[activeSheetIndex]);
-
-        // Pre-renderizar imagen de alta resolución para la impresión de forma síncrona
-        const highResUrl = canvasController.getHighResDataURL(3000);
-        const printImg = document.getElementById('print-map-image');
-        if (printImg && highResUrl) {
-            printImg.src = highResUrl;
+        const sheet = currentGroup.sheets[activeSheetIndex];
+        if (sheet && !sheet.sequenceStale) {
+            const done = loadCutProgress(activeMaterialGroup, sheet);
+            canvasController.completedCutIndex = done;
+            if (activeCutStepIndex < 0 && done >= 0 && done < (sheet.cuts || []).length - 1) {
+                activeCutStepIndex = done + 1;
+            } else if (activeCutStepIndex < 0 && done >= (sheet.cuts || []).length - 1 && (sheet.cuts || []).length) {
+                activeCutStepIndex = sheet.cuts.length - 1;
+            }
         }
+        renderCutSequence(currentGroup.sheets[activeSheetIndex]);
     }
 
     // Secuencia de cortes descriptiva
     function renderCutSequence(sheet) {
         const seqList = document.getElementById('sequence-list-el');
         seqList.innerHTML = '';
+        const stale = !!(sheet && sheet.sequenceStale);
+        if (sequenceStaleBanner) sequenceStaleBanner.hidden = !stale;
         
-        if (!sheet || sheet.cuts.length === 0) {
-            seqList.innerHTML = '<li>No se requieren cortes para esta plancha.</li>';
+        if (!sheet || !sheet.cuts || sheet.cuts.length === 0) {
+            seqList.innerHTML = stale
+                ? '<li>Secuencia invalidada. Reoptimice para regenerar los cortes de sierra.</li>'
+                : '<li>No se requieren cortes para esta plancha.</li>';
             return;
         }
 
-        const sortedCuts = [...sheet.cuts].sort((a, b) => a.level - b.level);
-        
-        sortedCuts.forEach((cut, idx) => {
+        sheet.cuts.forEach((cut, idx) => {
             const li = document.createElement('li');
             li.style.cursor = 'pointer';
             li.style.transition = 'all 0.15s';
-            li.innerHTML = `<strong>Paso ${idx + 1} (${cut.level === 1 ? 'Corte Primario' : 'Corte Secundario'}):</strong> ${cut.desc}.`;
+            const kind = cutKindLabel(cut);
+            const seq = cut.seq || (idx + 1);
+            li.innerHTML = `<strong>Paso ${seq} (${kind}):</strong> ${escapeHtml(cut.desc)}`;
             li.addEventListener('click', () => {
                 activeCutStepIndex = idx;
                 updateCutWizardUI();
@@ -741,8 +915,101 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnPrintReport.addEventListener('click', () => {
+        if (anySequenceStale()) {
+            alert('La secuencia de cortes está desactualizada. Reoptimice antes de imprimir los pasos de sierra.');
+        }
+        generatePrintReport();
         window.print();
     });
+
+    window.addEventListener('beforeprint', () => {
+        generatePrintReport();
+    });
+
+    function generatePrintReport() {
+        const printAllSheetsEl = document.getElementById('print-report-all-sheets');
+        const printLabelsEl = document.getElementById('print-labels-sheet');
+        if (!printAllSheetsEl || !optimizationResults || !printReportDirty) return;
+
+        printAllSheetsEl.innerHTML = '';
+        if (printLabelsEl) printLabelsEl.innerHTML = '';
+
+        const stale = anySequenceStale();
+        const labels = [];
+
+        for (const matName in optimizationResults.groups) {
+            const group = optimizationResults.groups[matName];
+            group.sheets.forEach((sheet, idx) => {
+                const section = document.createElement('div');
+                section.className = 'print-sheet-section';
+
+                canvasController.setSheet(sheet);
+                const highResUrl = canvasController.getHighResDataURL(3000);
+
+                let cutsHtml = '';
+                if (stale || sheet.sequenceStale) {
+                    cutsHtml = '<li>Secuencia desactualizada. Reoptimice antes de cortar.</li>';
+                } else if (!sheet.cuts || sheet.cuts.length === 0) {
+                    cutsHtml = '<li>No se requieren cortes para esta plancha.</li>';
+                } else {
+                    sheet.cuts.forEach((cut, cIdx) => {
+                        const kind = cutKindLabel(cut);
+                        cutsHtml += `<li><strong>Paso ${cut.seq || cIdx + 1} (${kind}):</strong> ${escapeHtml(cut.desc)}</li>`;
+                    });
+                }
+
+                let partsRows = '';
+                (sheet.placedParts || []).forEach((p) => {
+                    const num = p.originalIndex !== undefined ? p.originalIndex + 1 : '';
+                    const cantoLabels = ['L1', 'L2', 'A1', 'A2'];
+                    const cantos = (p.cantos || []).map((c, i) => c ? `${cantoLabels[i]}${c === 2 ? 'G' : 'D'}` : null).filter(Boolean).join(',') || '-';
+                    partsRows += `<tr><td>#${num}</td><td>${escapeHtml(p.name)}</td><td>${Math.round(p.w * 10) / 10}×${Math.round(p.h * 10) / 10}</td><td>${p.largoNominal}×${p.anchoNominal}</td><td>${escapeHtml(cantos)}</td></tr>`;
+                    labels.push({
+                        num,
+                        name: p.name,
+                        cut: `${Math.round(p.w * 10) / 10}×${Math.round(p.h * 10) / 10}`,
+                        material: p.material || matName
+                    });
+                });
+
+                section.innerHTML = `
+                    <h3 class="card-title" style="margin-top: 0; margin-bottom: 0.25cm;">Plano de taller — ${escapeHtml(matName)} — Plancha ${idx + 1} de ${group.sheets.length}</h3>
+                    <div class="print-sheet-img-container">
+                        <img class="print-sheet-img" src="${highResUrl || ''}" />
+                    </div>
+                    <h4 style="font-size: 12pt; margin: 0.2cm 0; font-weight: bold; color: #000;">Pasos de sierra</h4>
+                    <ol class="sequence-list print-steps" style="color: #000 !important; font-size: 11pt; padding-left: 1.25rem;">
+                        ${cutsHtml}
+                    </ol>
+                    <table class="print-parts-table">
+                        <thead><tr><th>#</th><th>Nombre</th><th>Corte mm</th><th>Nominal</th><th>Cantos</th></tr></thead>
+                        <tbody>${partsRows}</tbody>
+                    </table>
+                `;
+                printAllSheetsEl.appendChild(section);
+            });
+        }
+
+        if (printLabelsEl && labels.length) {
+            const page = document.createElement('div');
+            page.className = 'print-labels-page';
+            page.innerHTML = labels.map(l => `
+                <div class="print-label">
+                    <div class="label-num">#${escapeHtml(String(l.num))}</div>
+                    <div class="label-name">${escapeHtml(l.name)}</div>
+                    <div class="label-size">LxA corte ${escapeHtml(l.cut)} mm</div>
+                    <div class="label-mat">${escapeHtml(l.material)}</div>
+                </div>
+            `).join('');
+            printLabelsEl.appendChild(page);
+        }
+
+        if (optimizationResults.groups[activeMaterialGroup] && optimizationResults.groups[activeMaterialGroup].sheets[activeSheetIndex]) {
+            canvasController.setSheet(optimizationResults.groups[activeMaterialGroup].sheets[activeSheetIndex]);
+        }
+
+        printReportDirty = false;
+    }
 
     // Controles de zoom del canvas
     btnZoomIn.addEventListener('click', () => canvasController.zoom('in'));
@@ -854,6 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalCantoGrueso = 0;
         let totalGroovesLength = 0;
         let totalCutsCount = 0;
+        let leftoverArea = 0;
         
         const margin = parseFloat(inputRefilado.value) || 10;
         const planchaL = parseFloat(inputLargo.value) || 2440;
@@ -911,6 +1179,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupCutsLength += sheetCutsLength;
                 totalCutsCount += sheet.cuts.length;
                 groupCutsCount += sheet.cuts.length;
+
+                for (const r of sheet.freeRects) {
+                    leftoverArea += r.w * r.h;
+                }
             }
             
             const groupUsableArea = group.sheets.length * usableArea;
@@ -941,7 +1213,11 @@ document.addEventListener('DOMContentLoaded', () => {
             totalCutsCount: totalCutsCount,
             cantoDelgado: Math.round(totalCantoDelgado * 10) / 10,
             cantoGrueso: Math.round(totalCantoGrueso * 10) / 10,
-            totalGroovesLength: Math.round(totalGroovesLength * 10) / 10
+            totalGroovesLength: Math.round(totalGroovesLength * 10) / 10,
+            leftoverAreaM2: Math.round((leftoverArea / 1e6) * 1000) / 1000,
+            wastePercent: totalUsableArea > 0 ? Math.round((1 - totalPlacedArea / totalUsableArea) * 1000) / 10 : 0,
+            strategiesTried: optimizationResults.metrics.strategiesTried || 0,
+            winningStrategy: optimizationResults.metrics.winningStrategy || ''
         };
         
         displayResults(optimizationResults, true);
@@ -969,22 +1245,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentGroup = optimizationResults.groups[activeMaterialGroup];
         const sheet = currentGroup.sheets[activeSheetIndex];
         
-        if (!sheet || !sheet.cuts || sheet.cuts.length === 0) {
+        if (!sheet || !sheet.cuts || sheet.cuts.length === 0 || sheet.sequenceStale) {
             btnSeqPrev.disabled = true;
             btnSeqNext.disabled = true;
-            lblSeqStep.textContent = "Sin cortes";
+            if (btnSeqDone) btnSeqDone.disabled = true;
+            lblSeqStep.textContent = sheet && sheet.sequenceStale ? "Reoptimizar" : "Sin cortes";
             canvasController.activeCutIndex = -1;
             canvasController.render();
+            if (wizardOverlay) wizardOverlay.hidden = true;
             return;
         }
         
         btnSeqPrev.disabled = (activeCutStepIndex <= -1);
         btnSeqNext.disabled = (activeCutStepIndex >= sheet.cuts.length - 1);
+        if (btnSeqDone) btnSeqDone.disabled = activeCutStepIndex < 0;
         
         if (activeCutStepIndex === -1) {
             lblSeqStep.textContent = "Apagado";
+            if (wizardOverlay) wizardOverlay.hidden = true;
         } else {
+            const cut = sheet.cuts[activeCutStepIndex];
             lblSeqStep.textContent = `Corte ${activeCutStepIndex + 1} de ${sheet.cuts.length}`;
+            if (wizardOverlay) {
+                wizardOverlay.hidden = false;
+                wizardOverlayText.textContent = cut.desc || `Tope a ${cut.fenceMm} mm`;
+            }
         }
         
         canvasController.activeCutIndex = activeCutStepIndex;
@@ -1002,6 +1287,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.style.paddingLeft = '';
             }
         });
+    }
+
+    function markCurrentCutDone() {
+        if (!optimizationResults || !activeMaterialGroup) return;
+        const currentGroup = optimizationResults.groups[activeMaterialGroup];
+        const sheet = currentGroup.sheets[activeSheetIndex];
+        if (!sheet || !sheet.cuts || sheet.sequenceStale) return;
+        if (activeCutStepIndex < 0) activeCutStepIndex = 0;
+        saveCutProgress(activeMaterialGroup, sheet, activeCutStepIndex);
+        canvasController.completedCutIndex = activeCutStepIndex;
+        if (activeCutStepIndex < sheet.cuts.length - 1) {
+            activeCutStepIndex++;
+        }
+        updateCutWizardUI();
     }
 
     btnSeqPrev.addEventListener('click', () => {
@@ -1025,6 +1324,11 @@ document.addEventListener('DOMContentLoaded', () => {
         activeCutStepIndex = -1;
         updateCutWizardUI();
     });
+
+    if (btnSeqDone) btnSeqDone.addEventListener('click', markCurrentCutDone);
+    if (btnOverlayPrev) btnOverlayPrev.addEventListener('click', () => btnSeqPrev.click());
+    if (btnOverlayNext) btnOverlayNext.addEventListener('click', () => btnSeqNext.click());
+    if (btnOverlayDone) btnOverlayDone.addEventListener('click', markCurrentCutDone);
 
     selectMaterialGroup.addEventListener('change', (e) => {
         activeMaterialGroup = e.target.value;
@@ -1146,6 +1450,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!optimizationResults) {
             alert("Por favor optimice primero para generar el PDF.");
             return;
+        }
+        if (anySequenceStale()) {
+            alert("La secuencia de cortes está desactualizada. Reoptimice antes de imprimir los pasos de sierra. Se generará el mapa sin secuencia.");
         }
         
         const { jsPDF } = window.jspdf;
@@ -1329,15 +1636,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 printText("Secuencia de Cortes Sugerida:", 10, true, "#0f172a");
                 y += 2;
-                
-                const sortedCuts = [...sheet.cuts].sort((a, b) => a.level - b.level);
-                sortedCuts.forEach((cut, cIdx) => {
-                    if (y > 270) {
-                        doc.addPage();
-                        y = 20;
-                    }
-                    printText(`${cIdx + 1}. [${cut.level === 1 ? 'Corte Primario' : 'Corte Secundario'}] ${cut.desc}`, 8, false, "#334155");
+
+                if (sheet.sequenceStale || !sheet.cuts || sheet.cuts.length === 0) {
+                    printText(sheet.sequenceStale
+                        ? "Secuencia desactualizada. Reoptimice antes de cortar."
+                        : "No se requieren cortes para esta plancha.", 8, false, "#334155");
+                } else {
+                    sheet.cuts.forEach((cut, cIdx) => {
+                        if (y > 270) {
+                            doc.addPage();
+                            y = 20;
+                        }
+                        printText(`${cIdx + 1}. [${cutKindLabel(cut)}] ${cut.desc}`, 8, false, "#334155");
+                    });
+                }
+            });
+        }
+
+        const labelParts = [];
+        for (const matName in optimizationResults.groups) {
+            const group = optimizationResults.groups[matName];
+            group.sheets.forEach((sheet) => {
+                (sheet.placedParts || []).forEach((p) => {
+                    labelParts.push({
+                        num: p.originalIndex !== undefined ? p.originalIndex + 1 : '',
+                        name: p.name || 'Pieza',
+                        cut: `${Math.round(p.w * 10) / 10}×${Math.round(p.h * 10) / 10}`,
+                        material: p.material || matName
+                    });
                 });
+            });
+        }
+
+        if (labelParts.length) {
+            doc.addPage('a4', 'portrait');
+            y = 18;
+            printText("ETIQUETAS DE PIEZAS (50 × 30 mm)", 14, true, "#0f172a");
+            y += 4;
+            const lw = 50;
+            const lh = 30;
+            const gap = 4;
+            let x = margin;
+            labelParts.forEach((lab) => {
+                if (y + lh > 287) {
+                    doc.addPage();
+                    y = 15;
+                    x = margin;
+                }
+                if (x + lw > 210 - margin) {
+                    x = margin;
+                    y += lh + gap;
+                    if (y + lh > 287) {
+                        doc.addPage();
+                        y = 15;
+                    }
+                }
+                doc.setDrawColor(0);
+                doc.setLineWidth(0.3);
+                doc.rect(x, y, lw, lh);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(14);
+                doc.setTextColor('#000000');
+                doc.text(`#${lab.num}`, x + 2, y + 8);
+                doc.setFontSize(9);
+                doc.text(truncateText(lab.name, lw - 4), x + 2, y + 15);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.text(`LxA corte ${lab.cut} mm`, x + 2, y + 21);
+                doc.text(truncateText(lab.material, lw - 4), x + 2, y + 26);
+                x += lw + gap;
             });
         }
         
@@ -1400,6 +1767,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 descontarCanto: checkDescontarCanto.checked,
                 tieneVeta: checkTieneVeta.checked,
                 metodoCorte: selectMetodoCorte.value,
+                preferFewerFenceChanges: !!(checkPreferFence && checkPreferFence.checked),
                 cantoDelgadoEspesor: inputCantoDelgadoVal.value,
                 cantoGruesoEspesor: inputCantoGruesoVal.value,
                 grooveOffset: inputGrooveOffset.value,
@@ -1467,6 +1835,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkTieneVeta.checked = state.parametros.tieneVeta !== undefined ? state.parametros.tieneVeta : false;
                 
                 selectMetodoCorte.value = state.parametros.metodoCorte || 'optimal';
+                if (checkPreferFence) {
+                    checkPreferFence.checked = !!state.parametros.preferFewerFenceChanges;
+                }
                 inputCantoDelgadoVal.value = state.parametros.cantoDelgadoEspesor || '0.4';
                 inputCantoGruesoVal.value = state.parametros.cantoGruesoEspesor || '2.0';
                 inputGrooveOffset.value = state.parametros.grooveOffset || '15';
@@ -1530,8 +1901,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.sidebar-config input, .sidebar-config select').forEach(el => {
         el.addEventListener('change', () => {
             saveStateToLocalStorage();
+            updateWorkshopChecklist();
         });
     });
 
     loadStateFromLocalStorage();
+    updateWorkshopChecklist();
 });

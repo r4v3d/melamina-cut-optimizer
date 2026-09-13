@@ -13,6 +13,15 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 class CutMapCanvas {
     constructor(canvasId, containerId) {
         this.canvas = document.getElementById(canvasId);
@@ -28,6 +37,7 @@ class CutMapCanvas {
         this.panX = 0;
         this.panY = 0;
         this.activeCutIndex = -1;
+        this.completedCutIndex = -1; // pasos marcados como hechos (inclusive)
         
         this.isDragging = false;
         this.startX = 0;
@@ -417,7 +427,7 @@ class CutMapCanvas {
                 });
                 
                 this.tooltipEl.innerHTML = `
-                    <h4>${foundPart.name}</h4>
+                    <h4>${escapeHtml(foundPart.name)}</h4>
                     <p>Medida Final: <strong>${foundPart.largoNominal} x ${foundPart.anchoNominal} mm</strong></p>
                     <p>Medida de Corte: <strong>${foundPart.largo} x ${foundPart.ancho} mm</strong></p>
                     <p>Giro permitido (Veta): <strong>${foundPart.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
@@ -503,7 +513,9 @@ class CutMapCanvas {
         ctx.strokeRect(0, 0, this.sheet.w, this.sheet.h);
         
         // 2. Draw refilado margins (perimeter trim border)
-        const refiladoVal = (this.sheet.w - (this.sheet.freeRects[0]?.w || this.sheet.w)) / 2; 
+        const refiladoVal = this.sheet.refilado != null
+            ? this.sheet.refilado
+            : parseFloat(document.getElementById('input-refilado')?.value) || 0;
         if (refiladoVal > 0) {
             ctx.strokeStyle = isPrintMode ? '#94a3b8' : (isLightTheme ? 'rgba(239, 68, 68, 0.5)' : 'rgba(239, 68, 68, 0.4)');
             ctx.lineWidth = 1;
@@ -512,9 +524,17 @@ class CutMapCanvas {
             ctx.setLineDash([]);
         }
         
+        const activeCut = (!isPrintMode && this.activeCutIndex >= 0)
+            ? this.sheet.cuts[this.activeCutIndex]
+            : null;
+        const activeRegion = activeCut && activeCut.region ? activeCut.region : null;
+
         // 3. Draw free rectangles (sobrantes útiles)
         for (const r of this.sheet.freeRects) {
             const isHovered = !isPrintMode && (this.hoveredRect === r);
+            const dimmed = !!(activeRegion && !this.rectsOverlap(r, activeRegion));
+            ctx.save();
+            if (dimmed) ctx.globalAlpha = 0.28;
             ctx.fillStyle = isPrintMode 
                 ? '#f8fafc' 
                 : (isLightTheme 
@@ -522,30 +542,47 @@ class CutMapCanvas {
                     : (isHovered ? 'rgba(148, 163, 184, 0.15)' : 'rgba(148, 163, 184, 0.05)'));
             ctx.fillRect(r.x, r.y, r.w, r.h);
             
-            ctx.strokeStyle = isPrintMode ? '#cbd5e1' : (isLightTheme ? 'rgba(71, 85, 105, 0.3)' : 'rgba(148, 163, 184, 0.25)');
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = isPrintMode ? '#000000' : (isLightTheme ? 'rgba(71, 85, 105, 0.3)' : 'rgba(148, 163, 184, 0.25)');
+            ctx.lineWidth = isPrintMode ? 1.5 : 1;
             ctx.setLineDash([2, 4]);
             ctx.strokeRect(r.x, r.y, r.w, r.h);
             ctx.setLineDash([]);
             
             // Draw dimension labels for larger free spaces
             if (r.w > 60 && r.h > 40) {
-                const labelText = `Sobrante: ${Math.round(r.w)}x${Math.round(r.h)}`;
                 const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
                 let fontSize = Math.min(Math.round(r.h * 0.15), Math.round(r.w * 0.08));
-                fontSize = Math.min(Math.max(fontSize, 12), 24); // at least 12px, max 24px
+                fontSize = Math.min(Math.max(fontSize, isPrintMode ? 14 : 12), 24);
+                const leftoverUse = (r.w * r.h) >= 100000 ? 'guardar' : 'leña';
                 
-                ctx.fillStyle = isPrintMode ? '#475569' : (isLightTheme ? '#475569' : 'rgba(255, 255, 255, 0.85)');
+                ctx.fillStyle = isPrintMode ? '#000000' : (isLightTheme ? '#475569' : 'rgba(255, 255, 255, 0.85)');
                 ctx.font = `bold ${fontSize}px ${fontStack}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(labelText, r.x + r.w / 2, r.y + r.h / 2, r.w - 8);
+                ctx.fillText(`${Math.round(r.w)} × ${Math.round(r.h)}`, r.x + r.w / 2, r.y + r.h / 2 - (isPrintMode ? fontSize * 0.6 : 0), r.w - 8);
+                if (isPrintMode) {
+                    ctx.font = `${Math.max(fontSize - 2, 12)}px ${fontStack}`;
+                    ctx.fillText(leftoverUse, r.x + r.w / 2, r.y + r.h / 2 + fontSize * 0.6, r.w - 8);
+                }
             }
+            ctx.restore();
+        }
+
+        if (activeRegion) {
+            ctx.save();
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 6;
+            ctx.setLineDash([]);
+            ctx.strokeRect(activeRegion.x, activeRegion.y, activeRegion.w, activeRegion.h);
+            ctx.restore();
         }
         
         // 4. Draw placed parts
         for (const p of this.sheet.placedParts) {
             const isHovered = !isPrintMode && (this.hoveredPart === p);
+            const dimmed = !!(activeRegion && !this.rectsOverlap(p, activeRegion));
+            ctx.save();
+            if (dimmed) ctx.globalAlpha = 0.28;
             
             // Fill
             const partColor = p.color || '#06b6d4';
@@ -558,7 +595,7 @@ class CutMapCanvas {
             
             // Border
             ctx.strokeStyle = isPrintMode ? '#000000' : hexToRgba(partColor, 0.9);
-            ctx.lineWidth = (isHovered && !isPrintMode) ? 2 : 1;
+            ctx.lineWidth = isPrintMode ? 2 : ((isHovered && !isPrintMode) ? 2 : 1);
             ctx.strokeRect(p.x, p.y, p.w, p.h);
             
             // Draw tapacantos (edge banding borders)
@@ -569,29 +606,89 @@ class CutMapCanvas {
             
             // Draw part label (Name & Dimensions)
             this.drawPartLabels(ctx, p, isPrintMode, isHovered);
+            if (p.veta) this.drawGrainArrow(ctx, p, isPrintMode);
+            ctx.restore();
         }
         
         // 5. Draw cut lines
         this.sheet.cuts.forEach((cut, idx) => {
-            const isActive = (idx === this.activeCutIndex);
+            const isActive = !isPrintMode && (idx === this.activeCutIndex);
+            const isDone = !isPrintMode && this.activeCutIndex >= 0 && idx < this.activeCutIndex;
+            const isFuture = !isPrintMode && this.activeCutIndex >= 0 && idx > this.activeCutIndex;
             ctx.save();
+            if (isFuture) ctx.globalAlpha = 0.15;
+            else if (isDone) ctx.globalAlpha = 0.35;
             ctx.beginPath();
             ctx.moveTo(cut.x1, cut.y1);
             ctx.lineTo(cut.x2, cut.y2);
             
             if (isActive) {
-                ctx.strokeStyle = '#eab308'; // Amarillo brillante para el corte activo
-                ctx.lineWidth = isPrintMode ? 3 : 4;
-                ctx.setLineDash([8, 4]);
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 8;
+                ctx.setLineDash([]);
+            } else if (isPrintMode) {
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2.5;
+                ctx.setLineDash([10, 5]);
             } else {
-                ctx.strokeStyle = isPrintMode ? '#475569' : (isLightTheme ? 'rgba(239, 68, 68, 0.7)' : 'rgba(239, 68, 68, 0.6)');
+                ctx.strokeStyle = isLightTheme ? 'rgba(239, 68, 68, 0.7)' : 'rgba(239, 68, 68, 0.6)';
                 ctx.lineWidth = 1;
                 ctx.setLineDash([6, 3]);
             }
             ctx.stroke();
+
+            if (isPrintMode || isActive) {
+                this.drawFenceLabel(ctx, cut, isPrintMode, isActive);
+            }
             ctx.restore();
         });
         
+        ctx.restore();
+    }
+
+    rectsOverlap(a, b) {
+        return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+    }
+
+    drawFenceLabel(ctx, cut, isPrintMode, isActive) {
+        const mx = (cut.x1 + cut.x2) / 2;
+        const my = (cut.y1 + cut.y2) / 2;
+        const fence = Math.round((cut.fenceMm || 0) * 10) / 10;
+        const text = `tope ${fence} mm`;
+        ctx.save();
+        ctx.font = `bold ${isPrintMode ? 18 : 22}px 'Plus Jakarta Sans', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const pad = 8;
+        const tw = ctx.measureText(text).width;
+        const isH = Math.abs(cut.y2 - cut.y1) < 1;
+        const ox = isH ? 0 : 28;
+        const oy = isH ? -22 : 0;
+        ctx.fillStyle = isActive ? '#eab308' : '#000000';
+        ctx.fillRect(mx + ox - tw / 2 - pad, my + oy - 12, tw + pad * 2, 24);
+        ctx.fillStyle = isActive ? '#0f172a' : '#ffffff';
+        ctx.fillText(text, mx + ox, my + oy);
+        ctx.restore();
+    }
+
+    drawGrainArrow(ctx, p, isPrintMode) {
+        const alongX = !p.rotated;
+        const cx = p.x + p.w / 2;
+        const cy = p.y + p.h / 2;
+        const len = alongX ? Math.min(p.w * 0.45, 80) : Math.min(p.h * 0.45, 80);
+        ctx.save();
+        ctx.strokeStyle = isPrintMode ? '#000000' : '#fbbf24';
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.lineWidth = isPrintMode ? 2.5 : 2;
+        ctx.beginPath();
+        if (alongX) {
+            ctx.moveTo(cx - len / 2, cy - Math.min(p.h * 0.28, 28));
+            ctx.lineTo(cx + len / 2, cy - Math.min(p.h * 0.28, 28));
+        } else {
+            ctx.moveTo(cx - Math.min(p.w * 0.28, 28), cy + len / 2);
+            ctx.lineTo(cx - Math.min(p.w * 0.28, 28), cy - len / 2);
+        }
+        ctx.stroke();
         ctx.restore();
     }
 
@@ -608,8 +705,12 @@ class CutMapCanvas {
         const cRight = p.rotated ? p.cantos[1] : p.cantos[3];
         const cTop = p.rotated ? p.cantos[2] : p.cantos[0];
         const cBottom = p.rotated ? p.cantos[3] : p.cantos[1];
+        const lLeft = p.rotated ? 'L1' : 'A1';
+        const lRight = p.rotated ? 'L2' : 'A2';
+        const lTop = p.rotated ? 'A1' : 'L1';
+        const lBottom = p.rotated ? 'A2' : 'L2';
         
-        const drawEdge = (x1, y1, x2, y2, type) => {
+        const drawEdge = (x1, y1, x2, y2, type, label) => {
             if (type === 0) return;
             
             ctx.save();
@@ -618,25 +719,36 @@ class CutMapCanvas {
             ctx.lineTo(x2, y2);
             
             if (type === 1) { // Delgado
-                ctx.strokeStyle = isPrintMode ? '#475569' : '#06b6d4';
-                ctx.lineWidth = isPrintMode ? 2 : 3;
+                ctx.strokeStyle = isPrintMode ? '#000000' : '#06b6d4';
+                ctx.lineWidth = isPrintMode ? 4 : 3;
             } else if (type === 2) { // Grueso
                 ctx.strokeStyle = isPrintMode ? '#000000' : '#f97316';
-                ctx.lineWidth = isPrintMode ? 4 : 5;
+                ctx.lineWidth = isPrintMode ? 7 : 5;
             }
             
             ctx.stroke();
+
+            if (isPrintMode && label) {
+                const mx = (x1 + x2) / 2;
+                const my = (y1 + y2) / 2;
+                ctx.font = "bold 14px 'Plus Jakarta Sans', sans-serif";
+                ctx.fillStyle = '#000000';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const isH = Math.abs(y2 - y1) < 1;
+                ctx.fillText(label, mx + (isH ? 0 : 10), my + (isH ? 12 : 0));
+            }
             ctx.restore();
         };
         
         // Top Edge (y = p.y, from x = p.x to p.x + p.w)
-        drawEdge(p.x, p.y, p.x + p.w, p.y, cTop);
+        drawEdge(p.x, p.y, p.x + p.w, p.y, cTop, lTop);
         // Bottom Edge (y = p.y + p.h, from x = p.x to p.x + p.w)
-        drawEdge(p.x, p.y + p.h, p.x + p.w, p.y + p.h, cBottom);
+        drawEdge(p.x, p.y + p.h, p.x + p.w, p.y + p.h, cBottom, lBottom);
         // Left Edge (x = p.x, from y = p.y to p.y + p.h)
-        drawEdge(p.x, p.y, p.x, p.y + p.h, cLeft);
+        drawEdge(p.x, p.y, p.x, p.y + p.h, cLeft, lLeft);
         // Right Edge (x = p.x + p.w, from y = p.y to p.y + p.h)
-        drawEdge(p.x + p.w, p.y, p.x + p.w, p.y + p.h, cRight);
+        drawEdge(p.x + p.w, p.y, p.x + p.w, p.y + p.h, cRight, lRight);
     }
 
     // Helper to draw labels (Text) inside the pieces
@@ -648,8 +760,17 @@ class CutMapCanvas {
         ctx.textBaseline = 'middle';
         
         const isLightTheme = document.body.classList.contains('light-theme');
-        const nameText = p.name;
-        const dimText = `${p.largoNominal} x ${p.anchoNominal}`;
+        const partNum = p.originalIndex !== undefined ? `#${p.originalIndex + 1}` : '';
+        const nameText = isPrintMode && partNum ? `${partNum} ${p.name}` : p.name;
+        const cutText = `${Math.round(p.w * 10) / 10} × ${Math.round(p.h * 10) / 10}`;
+        const dimText = isPrintMode
+            ? `corte ${cutText}`
+            : `${p.largoNominal} x ${p.anchoNominal}`;
+
+        if (isPrintMode) {
+            this.drawShopPartLabel(ctx, p, fontStack);
+            return;
+        }
 
         // Check if piece is vertical
         const isVertical = p.h > p.w * 1.3;
@@ -816,6 +937,27 @@ class CutMapCanvas {
         }
     }
 
+    drawShopPartLabel(ctx, p, fontStack) {
+        const partNum = p.originalIndex !== undefined ? String(p.originalIndex + 1) : '';
+        const cutText = `${Math.round(p.w * 10) / 10}×${Math.round(p.h * 10) / 10}`;
+        const nomText = `${p.largoNominal}×${p.anchoNominal}`;
+        const cx = p.x + p.w / 2;
+        const cy = p.y + p.h / 2;
+        const maxW = Math.max(8, p.w - 8);
+        ctx.save();
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const numSize = Math.min(Math.max(18, Math.min(p.w, p.h) * 0.28), 42);
+        ctx.font = `bold ${numSize}px ${fontStack}`;
+        if (partNum) ctx.fillText(`#${partNum}`, cx, cy - numSize * 0.55, maxW);
+        ctx.font = `bold ${Math.max(14, Math.min(numSize * 0.45, 20))}px ${fontStack}`;
+        ctx.fillText(cutText, cx, cy + numSize * 0.15, maxW);
+        ctx.font = `${Math.max(11, Math.min(numSize * 0.32, 14))}px ${fontStack}`;
+        ctx.fillText(`nom. ${nomText}`, cx, cy + numSize * 0.7, maxW);
+        ctx.restore();
+    }
+
     getHighResDataURL(targetWidth = 3000) {
         if (!this.sheet) return null;
         
@@ -932,7 +1074,7 @@ class CutMapCanvas {
         
         menu.innerHTML = `
             <div class="canvas-context-menu-info">
-                <h4>${part.name}</h4>
+                <h4>${escapeHtml(part.name)}</h4>
                 <p>Medida Final: <strong>${part.largoNominal} x ${part.anchoNominal} mm</strong></p>
                 <p>Medida de Corte: <strong>${part.largo} x ${part.ancho} mm</strong></p>
                 <p>Veta (Giro): <strong>${part.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
@@ -1029,33 +1171,41 @@ class CutMapCanvas {
     // Rotación manual con colisiones AABB
     rotatePartManually(part) {
         if (!this.sheet) return;
+
+        if (part.veta) {
+            alert("No se puede girar esta pieza: la veta está activa y el giro contradice la veta de la plancha.");
+            return;
+        }
         
         const newW = part.h;
         const newH = part.w;
-        const refiladoVal = parseFloat(document.getElementById('input-refilado')?.value) || 10;
+        const refiladoVal = this.sheet.refilado != null
+            ? this.sheet.refilado
+            : parseFloat(document.getElementById('input-refilado')?.value) || 10;
+        const kerf = parseFloat(document.getElementById('input-sierra-espesor')?.value) || 4;
         
         // 1. Validar bordes útil plancha
         const limitX = this.sheet.w - refiladoVal;
         const limitY = this.sheet.h - refiladoVal;
         
-        if (part.x + newW > limitX || part.y + newH > limitY) {
+        if (part.x + newW > limitX + 0.2 || part.y + newH > limitY + 0.2) {
             alert("No se puede rotar esta pieza: supera los límites útiles de la plancha.");
             return;
         }
         
-        // 2. Comprobar intersecciones AABB con otras piezas de la plancha
+        // 2. Comprobar intersecciones AABB con otras piezas (incluye kerf de sierra)
         for (const other of this.sheet.placedParts) {
             if (other === part) continue;
             
             const collision = !(
-                part.x + newW <= other.x || 
-                other.x + other.w <= part.x ||
-                part.y + newH <= other.y ||
-                other.y + other.h <= part.y
+                part.x + newW + kerf <= other.x || 
+                other.x + other.w + kerf <= part.x ||
+                part.y + newH + kerf <= other.y ||
+                other.y + other.h + kerf <= part.y
             );
             
             if (collision) {
-                alert("No se puede rotar esta pieza: colisiona con otras piezas colocadas en este tablero.");
+                alert("No se puede rotar esta pieza: colisiona con otras piezas o no deja espacio de sierra.");
                 return;
             }
         }
@@ -1064,6 +1214,7 @@ class CutMapCanvas {
         part.w = newW;
         part.h = newH;
         part.rotated = !part.rotated;
+        this.invalidateSequence();
         
         // Disparar evento personalizado en el ámbito global para actualizar estadísticas
         if (window.onCanvasPartModified) {
@@ -1073,9 +1224,29 @@ class CutMapCanvas {
         }
     }
 
+    invalidateSequence() {
+        if (!this.sheet) return;
+        this.sheet.cuts = [];
+        this.sheet.sequenceStale = true;
+        this.sheet.sequenceValid = false;
+        this.activeCutIndex = -1;
+        this.completedCutIndex = -1;
+    }
+
     // Remoción manual
     removePartManually(part) {
         if (!this.sheet) return;
+
+        // Devolver el hueco de la pieza como sobrante útil
+        if (part.w > 0 && part.h > 0) {
+            this.sheet.freeRects.push({
+                x: part.x,
+                y: part.y,
+                w: part.w,
+                h: part.h
+            });
+        }
+        this.invalidateSequence();
         
         if (window.onCanvasPartRemoved) {
             window.onCanvasPartRemoved(part);

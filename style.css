@@ -419,6 +419,12 @@ input[type="color"].part-color::-webkit-color-swatch {
     animation: pulse 2s infinite;
 }
 
+.btn.is-busy {
+    animation: none;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
 /* Workspace Area */
 .workspace-area {
     display: flex;
@@ -679,8 +685,11 @@ input[type="color"].part-color::-webkit-color-swatch {
     margin-top: 0.15rem;
 }
 
-.metric-sub-label strong {
-    color: var(--text-primary);
+#opt-strategy-note {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .metric-icon {
@@ -840,6 +849,117 @@ input[type="color"].part-color::-webkit-color-swatch {
     cursor: grabbing;
 }
 
+.cut-wizard-overlay {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(234, 179, 8, 0.55);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    color: #f8fafc;
+    pointer-events: auto;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.cut-wizard-overlay-text {
+    font-size: 18px;
+    line-height: 1.35;
+    font-weight: 650;
+    margin: 0 0 0.65rem 0;
+}
+
+.cut-wizard-overlay-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-wizard {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input-muted, #1e293b);
+    color: #f8fafc;
+    cursor: pointer;
+}
+
+.btn-wizard-done {
+    background: #eab308;
+    color: #0f172a;
+    border-color: #ca8a04;
+}
+
+.workshop-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.workshop-checklist span {
+    background: rgba(148, 163, 184, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+}
+
+.workshop-checklist .is-on {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.45);
+}
+
+.sequence-stale-banner {
+    background: rgba(234, 179, 8, 0.16);
+    border: 1px solid #eab308;
+    color: var(--text-primary);
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.part-row.row-warn {
+    background: rgba(234, 179, 8, 0.12);
+}
+
+.part-row.row-error {
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.row-warning {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #f59e0b;
+    margin-top: 0.15rem;
+}
+
+.part-row.row-error .row-warning {
+    color: #f87171;
+}
+
+.canvas-container.fullscreen-map .cut-wizard-overlay {
+    left: 16px;
+    right: 16px;
+    bottom: 5.5rem;
+    max-width: none;
+}
+
+.canvas-container.fullscreen-map .btn-wizard {
+    min-height: 48px;
+    font-size: 1.05rem;
+}
+
 #cut-map-canvas {
     background-color: var(--bg-canvas);
     display: block;
@@ -849,7 +969,8 @@ input[type="color"].part-color::-webkit-color-swatch {
 }
 
 #print-map-image,
-#print-report-all-sheets {
+#print-report-all-sheets,
+#print-labels-sheet {
     display: none;
     width: 100%;
     max-width: 100%;
@@ -1342,8 +1463,13 @@ input[type="color"].part-color::-webkit-color-swatch {
     body {
         background-color: #ffffff !important;
         color: #000000 !important;
-        font-size: 10pt;
+        font-size: 11pt;
         min-height: auto;
+    }
+
+    @page {
+        size: A4 landscape;
+        margin: 8mm;
     }
     
     .app-container {
@@ -1468,28 +1594,30 @@ input[type="color"].part-color::-webkit-color-swatch {
         display: none !important;
     }
     
-    #print-report-all-sheets {
+    #print-report-all-sheets,
+    #print-labels-sheet {
         display: block !important;
         width: 100% !important;
     }
     
     .print-sheet-section {
         page-break-after: always;
-        margin-top: 1cm;
-        margin-bottom: 1cm;
+        break-after: page;
+        margin-top: 0;
+        margin-bottom: 0;
     }
     
     .print-sheet-section:last-child {
-        page-break-after: avoid !important;
+        page-break-after: always !important;
     }
     
     .print-sheet-img-container {
         border: 1px solid #000000 !important;
         background: #ffffff !important;
-        height: 15cm !important;
+        height: 12cm !important;
         position: relative !important;
-        margin-top: 0.5cm;
-        margin-bottom: 0.5cm;
+        margin-top: 0.3cm;
+        margin-bottom: 0.3cm;
         overflow: hidden !important;
     }
     
@@ -1499,16 +1627,81 @@ input[type="color"].part-color::-webkit-color-swatch {
         height: 100% !important;
         object-fit: contain !important;
     }
+
+    .print-parts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11pt;
+        color: #000 !important;
+        margin-top: 0.3cm;
+    }
+
+    .print-parts-table th,
+    .print-parts-table td {
+        border: 1px solid #000;
+        padding: 0.12cm 0.2cm;
+        text-align: left;
+    }
+
+    .print-steps {
+        font-size: 11pt !important;
+        color: #000 !important;
+        font-weight: 600;
+    }
     
     .sequence-list {
         color: #000000 !important;
+        font-size: 11pt !important;
     }
     
     .sequence-list li strong {
         color: #000000 !important;
     }
+
+    .print-labels-page {
+        page-break-before: always;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4mm;
+    }
+
+    .print-label {
+        width: 50mm;
+        height: 30mm;
+        border: 1px solid #000;
+        box-sizing: border-box;
+        padding: 2mm 3mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: #000 !important;
+        background: #fff;
+        page-break-inside: avoid;
+    }
+
+    .print-label .label-num {
+        font-size: 16pt;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .print-label .label-name {
+        font-size: 10pt;
+        font-weight: 700;
+    }
+
+    .print-label .label-size,
+    .print-label .label-mat {
+        font-size: 9pt;
+    }
     
     .print-only {
         display: block !important;
+    }
+
+    .cut-wizard-overlay,
+    .sequence-stale-banner,
+    .workshop-checklist {
+        display: none !important;
     }
 }
