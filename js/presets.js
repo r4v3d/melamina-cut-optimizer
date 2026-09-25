@@ -1,6 +1,6 @@
 // Presets de Planchas y Muebles para MelaminaCut
 
-const PLANCHA_PRESETS = [
+export const PLANCHA_PRESETS = [
     {
         id: "standard-2440-1830",
         name: "Estándar Novopan / Pelíkan / Masisa (2440 x 1830 mm)",
@@ -43,7 +43,7 @@ const PLANCHA_PRESETS = [
     }
 ];
 
-const MUEBLE_PRESETS = [
+export const MUEBLE_PRESETS = [
     {
         id: "velador",
         name: "Velador Moderno con 2 Cajones (Espesor 18mm)",
