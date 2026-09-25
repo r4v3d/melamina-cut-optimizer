@@ -2,13 +2,36 @@
 // Prueba múltiples heurísticas y elige el layout con menos planchas y más eficiencia.
 
 const OPT_EPS = 0.2; // mm — tolerancia de sierra / error de punto flotante
+const MIN_RETAZO_AREA_MM2 = 100000; // 0.1 m² — sobrante que vale la pena guardar
+const MIN_RETAZO_LADO_MM = 50;
+
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+// Generador pseudoaleatorio con semilla (resultados reproducibles)
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// Número finito o valor por defecto (respeta el 0; '' / null / NaN → defecto)
+function finiteOr(v, def) {
+    if (v === '' || v === null || v === undefined) return def;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+}
 
 class CutOptimizer {
     constructor(config = {}) {
-        this.planchaLargo = config.planchaLargo || 2440;
-        this.planchaAncho = config.planchaAncho || 1830;
-        this.espesorSierra = config.espesorSierra !== undefined ? config.espesorSierra : 4;
-        this.refilado = config.refilado !== undefined ? config.refilado : 10;
+        this.planchaLargo = finiteOr(config.planchaLargo, 0) > 0 ? Number(config.planchaLargo) : 2440;
+        this.planchaAncho = finiteOr(config.planchaAncho, 0) > 0 ? Number(config.planchaAncho) : 1830;
+        this.espesorSierra = Math.max(0, finiteOr(config.espesorSierra, 4));
+        this.refilado = Math.max(0, finiteOr(config.refilado, 10));
         this.descontarCanto = config.descontarCanto !== undefined ? config.descontarCanto : true;
         this.tieneVetaGlobal = config.tieneVetaGlobal !== undefined ? config.tieneVetaGlobal : false;
         this.metodoCorte = config.metodoCorte || 'optimal'; // 'optimal', 'horizontal', 'vertical', 'strips'
@@ -18,13 +41,24 @@ class CutOptimizer {
 
         this.cantoEspesor = {
             0: 0.0,
-            1: config.cantoDelgadoEspesor !== undefined ? parseFloat(config.cantoDelgadoEspesor) : 0.4,
-            2: config.cantoGruesoEspesor !== undefined ? parseFloat(config.cantoGruesoEspesor) : 2.0
+            1: Math.max(0, finiteOr(config.cantoDelgadoEspesor, 0.4)),
+            2: Math.max(0, finiteOr(config.cantoGruesoEspesor, 2.0))
         };
+        // mm extra de tapacanto por lado enchapado (despunte en la enchapadora)
+        this.cantoMargenMm = Math.max(0, finiteOr(config.cantoMargenMm, 0));
+        // Búsqueda aleatoria adicional tras las heurísticas (0 = desactivada)
+        this.searchTimeMs = Math.max(0, finiteOr(config.searchTimeMs, 0));
+        this.seed = finiteOr(config.seed, 12345);
+        this.config = { ...config };
     }
 
     static round1(n) {
         return Math.round(n * 10) / 10;
+    }
+
+    // Sobrante que conviene guardar como retazo (mismo criterio en métricas y mapa)
+    static isUsefulLeftover(r) {
+        return r.w * r.h >= MIN_RETAZO_AREA_MM2 && Math.min(r.w, r.h) >= MIN_RETAZO_LADO_MM;
     }
 
     static approxEq(a, b, eps = OPT_EPS) {
@@ -73,6 +107,7 @@ class CutOptimizer {
                     material: p.material || "Estándar 18mm",
                     color: p.color || "#06b6d4",
                     originalIndex: p.index,
+                    rowId: p.rowId,
                     invalid: invalid,
                     unplacedReason: invalid ? 'invalid_size' : null
                 });
@@ -134,86 +169,71 @@ class CutOptimizer {
         }
     }
 
-    // Optimiza la distribución de las piezas
-    optimize(rawParts) {
-        const allParts = this.prepareParts(rawParts);
+    // Optimizador con la plancha propia de un material del catálogo (o este mismo si no hay)
+    forMaterial(material) {
+        if (!material) return this;
+        const override = {};
+        if (finiteOr(material.planchaLargo, 0) > 0) override.planchaLargo = material.planchaLargo;
+        if (finiteOr(material.planchaAncho, 0) > 0) override.planchaAncho = material.planchaAncho;
+        if (typeof material.tieneVetaGlobal === 'boolean') override.tieneVetaGlobal = material.tieneVetaGlobal;
+        return new CutOptimizer({ ...this.config, ...override });
+    }
 
-        const groups = {};
-        for (const p of allParts) {
+    // Configuración efectiva (se guarda en cada grupo para ediciones y métricas posteriores)
+    configSnapshot() {
+        return {
+            ...this.config,
+            planchaLargo: this.planchaLargo,
+            planchaAncho: this.planchaAncho,
+            espesorSierra: this.espesorSierra,
+            refilado: this.refilado,
+            tieneVetaGlobal: this.tieneVetaGlobal
+        };
+    }
+
+    /**
+     * Optimiza la distribución de las piezas.
+     * options.onProgress(fraccion 0..1): avance
+     * options.materials: { [material]: { planchaLargo, planchaAncho, tieneVetaGlobal } } plancha por material
+     * options.stock: { [material]: [{ id, largo, ancho }] } retazos del inventario a usar primero
+     */
+    optimize(rawParts, options = {}) {
+        const materials = options.materials || {};
+        const stock = options.stock || {};
+
+        const rawGroups = {};
+        for (const p of rawParts) {
             const mat = p.material || "Estándar 18mm";
-            if (!groups[mat]) groups[mat] = [];
-            groups[mat].push(p);
+            if (!rawGroups[mat]) rawGroups[mat] = [];
+            rawGroups[mat].push(p);
         }
+        const matNames = Object.keys(rawGroups);
+        const groupOpt = {};
+        for (const mat of matNames) groupOpt[mat] = this.forMaterial(materials[mat]);
+
+        const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+        const searching = this.searchTimeMs > 0;
+        const detWeight = searching ? 0.8 : 1;
+        const totalSteps = matNames.reduce((s, mat) => s + groupOpt[mat].strategyCatalog().length, 0) || 1;
+        let doneSteps = 0;
+        const onStep = onProgress ? () => onProgress(Math.min(1, detWeight * (++doneSteps / totalSteps))) : null;
 
         const optimizedGroups = {};
-        const globalMetrics = {
-            globalEfficiency: 0,
-            sheetsCount: 0,
-            totalCutsLength: 0,
-            totalCutsCount: 0,
-            cantoDelgado: 0,
-            cantoGrueso: 0,
-            totalGroovesLength: 0,
-            leftoverAreaM2: 0,
-            wastePercent: 0,
-            strategiesTried: 0,
-            winningStrategy: '',
-            uniqueFenceCount: 0
-        };
+        matNames.forEach((mat, gi) => {
+            const opt = groupOpt[mat];
+            if (searching) opt.searchTimeMs = this.searchTimeMs / matNames.length;
+            const onSearch = onProgress && searching
+                ? f => onProgress(detWeight + (1 - detWeight) * ((gi + f) / matNames.length))
+                : null;
+            const result = opt.optimizeGroup(opt.prepareParts(rawGroups[mat]), onStep, stock[mat] || [], onSearch);
+            result.config = opt.configSnapshot();
+            optimizedGroups[mat] = result;
+        });
+        if (onProgress) onProgress(1);
 
-        let totalUsableArea = 0;
-        let totalPlacedArea = 0;
-        let totalLeftover = 0;
-        const winningNames = [];
-        let strategiesTried = 0;
-
-        for (const matName in groups) {
-            const groupResult = this.optimizeGroup(groups[matName]);
-            optimizedGroups[matName] = groupResult;
-
-            globalMetrics.sheetsCount += groupResult.metrics.sheetsCount;
-            globalMetrics.totalCutsLength += groupResult.metrics.totalCutsLength;
-            globalMetrics.totalCutsCount += groupResult.metrics.totalCutsCount;
-            globalMetrics.cantoDelgado += groupResult.metrics.cantoDelgado;
-            globalMetrics.cantoGrueso += groupResult.metrics.cantoGrueso;
-            globalMetrics.totalGroovesLength += groupResult.metrics.totalGroovesLength;
-            totalLeftover += groupResult.metrics.leftoverAreaMm2 || 0;
-            globalMetrics.uniqueFenceCount += groupResult.metrics.uniqueFenceCount || 0;
-            strategiesTried = Math.max(strategiesTried, groupResult.metrics.strategiesTried || 0);
-            if (groupResult.metrics.winningStrategy) {
-                winningNames.push(groupResult.metrics.winningStrategy);
-            }
-
-            const usableAreaPerSheet = this.usableWidth() * this.usableHeight();
-            totalUsableArea += groupResult.sheets.length * usableAreaPerSheet;
-
-            for (const sheet of groupResult.sheets) {
-                for (const p of sheet.placedParts) {
-                    totalPlacedArea += p.w * p.h;
-                }
-            }
-        }
-
-        globalMetrics.globalEfficiency = totalUsableArea > 0
-            ? Math.round((totalPlacedArea / totalUsableArea) * 1000) / 10
-            : 0;
-        globalMetrics.totalCutsLength = CutOptimizer.round1(globalMetrics.totalCutsLength);
-        globalMetrics.cantoDelgado = CutOptimizer.round1(globalMetrics.cantoDelgado);
-        globalMetrics.cantoGrueso = CutOptimizer.round1(globalMetrics.cantoGrueso);
-        globalMetrics.totalGroovesLength = CutOptimizer.round1(globalMetrics.totalGroovesLength);
-        globalMetrics.leftoverAreaM2 = Math.round((totalLeftover / 1e6) * 1000) / 1000;
-        globalMetrics.wastePercent = totalUsableArea > 0
-            ? Math.round((1 - totalPlacedArea / totalUsableArea) * 1000) / 10
-            : 0;
-        globalMetrics.strategiesTried = strategiesTried;
-        globalMetrics.winningStrategy = winningNames[0] || '';
-
+        const globalMetrics = this.aggregateMetrics(optimizedGroups);
         const firstGroupName = Object.keys(optimizedGroups)[0] || "Estándar 18mm";
-        const fallbackGroup = optimizedGroups[firstGroupName] || {
-            sheets: [],
-            unplacedParts: [],
-            metrics: { ...globalMetrics, sheetsCount: 0 }
-        };
+        const fallbackGroup = optimizedGroups[firstGroupName] || { sheets: [] };
 
         return {
             groups: optimizedGroups,
@@ -221,6 +241,75 @@ class CutOptimizer {
             sheets: fallbackGroup.sheets,
             unplacedParts: Object.values(optimizedGroups).reduce((acc, g) => acc.concat(g.unplacedParts), [])
         };
+    }
+
+    // Suma las métricas de todos los grupos de material (cada grupo ya tiene group.metrics)
+    aggregateMetrics(groups) {
+        const global = this.emptyMetrics();
+        delete global.leftoverAreaMm2;
+
+        let totalUsableArea = 0;
+        let totalPlacedArea = 0;
+        let totalLeftover = 0;
+        const winningNames = [];
+
+        for (const matName in groups) {
+            const group = groups[matName];
+            const m = group.metrics || this.emptyMetrics();
+
+            global.sheetsCount += group.sheets.length;
+            global.newSheetsCount += group.sheets.filter(s => !s.isRemnant).length;
+            global.remnantsUsed += group.sheets.filter(s => s.isRemnant).length;
+            global.totalCutsLength += m.totalCutsLength;
+            global.totalCutsCount += m.totalCutsCount;
+            global.cantoDelgado += m.cantoDelgado;
+            global.cantoGrueso += m.cantoGrueso;
+            global.totalGroovesLength += m.totalGroovesLength;
+            global.uniqueFenceCount += m.uniqueFenceCount || 0;
+            totalLeftover += m.leftoverAreaMm2 || 0;
+            global.strategiesTried = Math.max(global.strategiesTried, m.strategiesTried || 0);
+            if (m.winningStrategy) winningNames.push(m.winningStrategy);
+
+            for (const sheet of group.sheets) {
+                totalUsableArea += CutOptimizer.sheetUsableArea(sheet);
+                for (const p of sheet.placedParts) {
+                    totalPlacedArea += p.w * p.h;
+                }
+            }
+        }
+
+        global.globalEfficiency = totalUsableArea > 0
+            ? Math.round((totalPlacedArea / totalUsableArea) * 1000) / 10
+            : 0;
+        global.totalCutsLength = CutOptimizer.round1(global.totalCutsLength);
+        global.cantoDelgado = CutOptimizer.round1(global.cantoDelgado);
+        global.cantoGrueso = CutOptimizer.round1(global.cantoGrueso);
+        global.totalGroovesLength = CutOptimizer.round1(global.totalGroovesLength);
+        global.leftoverAreaM2 = Math.round((totalLeftover / 1e6) * 1000) / 1000;
+        global.wastePercent = totalUsableArea > 0
+            ? Math.round((1 - totalPlacedArea / totalUsableArea) * 1000) / 10
+            : 0;
+        global.winningStrategy = winningNames[0] || '';
+        return global;
+    }
+
+    static sheetUsableArea(sheet) {
+        return Math.max(0, sheet.usableW) * Math.max(0, sheet.usableH);
+    }
+
+    // Recalcula las métricas tras una edición manual, conservando la info de estrategia
+    recomputeMetrics(results) {
+        for (const matName in results.groups) {
+            const group = results.groups[matName];
+            const prev = group.metrics || {};
+            const opt = group.config ? new CutOptimizer(group.config) : this;
+            group.metrics = opt.computeMetrics(group.sheets, group.unplacedParts);
+            group.metrics.winningStrategy = prev.winningStrategy || '';
+            group.metrics.strategiesTried = prev.strategiesTried || 0;
+        }
+        results.metrics = this.aggregateMetrics(results.groups);
+        results.unplacedParts = Object.values(results.groups).reduce((acc, g) => acc.concat(g.unplacedParts), []);
+        return results;
     }
 
     usableWidth() {
@@ -351,6 +440,11 @@ class CutOptimizer {
         const uB = current.unplacedParts.length;
         if (uA !== uB) return uA < uB;
 
+        // Primero: menos planchas nuevas (las que se compran); luego menos planchas en total
+        const nA = candidate.sheets.filter(s => !s.isRemnant).length;
+        const nB = current.sheets.filter(s => !s.isRemnant).length;
+        if (nA !== nB) return nA < nB;
+
         const sA = candidate.sheets.length;
         const sB = current.sheets.length;
         if (sA !== sB) return sA < sB;
@@ -376,7 +470,8 @@ class CutOptimizer {
         return candidate.metrics.totalCutsLength < current.metrics.totalCutsLength;
     }
 
-    optimizeGroup(parts) {
+    // remnants: retazos del inventario [{ id, largo, ancho }] que se llenan antes de abrir planchas nuevas
+    optimizeGroup(parts, onStep = null, remnants = [], onSearch = null) {
         const maxUsableLargo = this.usableWidth();
         const maxUsableAncho = this.usableHeight();
 
@@ -407,20 +502,47 @@ class CutOptimizer {
             };
         }
 
+        const stock = [...remnants]
+            .filter(r => finiteOr(r.largo, 0) > 0 && finiteOr(r.ancho, 0) > 0)
+            .sort((a, b) => b.largo * b.ancho - a.largo * a.ancho);
         const strategies = this.strategyCatalog();
         let best = null;
-        let winning = null;
+        let winningLabel = '';
+        let tried = 0;
 
-        for (const strategy of strategies) {
-            const packed = this.packWithStrategy(validParts, strategy);
+        const evaluate = (packed, label) => {
+            tried++;
             packed.unplacedParts = packed.unplacedParts.concat(unplacedParts.map(p => ({ ...p })));
             packed.metrics = this.computeMetrics(packed.sheets, packed.unplacedParts);
-            packed.metrics.winningStrategy = this.strategyLabel(strategy);
-            packed.metrics.strategiesTried = strategies.length;
-
             if (this.isBetterResult(packed, best)) {
                 best = packed;
-                winning = strategy;
+                winningLabel = label;
+            }
+        };
+
+        for (const strategy of strategies) {
+            evaluate(this.packWithStrategy(validParts, strategy, stock), this.strategyLabel(strategy));
+            if (onStep) onStep();
+        }
+
+        // Búsqueda aleatoria: perturba el orden de las piezas y reempaca mientras quede tiempo
+        if (this.searchTimeMs > 0 && validParts.length > 1) {
+            const rng = mulberry32(this.seed);
+            const start = nowMs();
+            const bases = strategies.filter(s => s.pack !== 'strips');
+            while (nowMs() - start < this.searchTimeMs) {
+                const base = bases[Math.floor(rng() * bases.length)];
+                const order = this.sortParts(validParts, base.sort);
+                const swaps = Math.max(1, Math.floor(order.length / 3));
+                for (let k = 0; k < swaps; k++) {
+                    const i = Math.floor(rng() * (order.length - 1));
+                    [order[i], order[i + 1]] = [order[i + 1], order[i]];
+                }
+                evaluate(
+                    this.packWithStrategy(order, { ...base, presorted: true }, stock),
+                    this.strategyLabel(base) + ' · búsqueda aleatoria'
+                );
+                if (onSearch) onSearch(Math.min(1, (nowMs() - start) / this.searchTimeMs));
             }
         }
 
@@ -428,8 +550,8 @@ class CutOptimizer {
             return { sheets: [], unplacedParts, metrics: this.emptyMetrics() };
         }
 
-        best.metrics.winningStrategy = this.strategyLabel(winning);
-        best.metrics.strategiesTried = strategies.length;
+        best.metrics.winningStrategy = winningLabel;
+        best.metrics.strategiesTried = tried;
         return best;
     }
 
@@ -447,7 +569,9 @@ class CutOptimizer {
             wastePercent: 0,
             strategiesTried: 0,
             winningStrategy: '',
-            uniqueFenceCount: 0
+            uniqueFenceCount: 0,
+            newSheetsCount: 0,
+            remnantsUsed: 0
         };
     }
 
@@ -456,23 +580,31 @@ class CutOptimizer {
         return `s${sheet.nextStripId - 1}`;
     }
 
-    createNewSheet(sheetId) {
-        const margin = this.refilado;
+    // spec opcional para retazos: { w, h, refilado, remnantId }
+    createNewSheet(sheetId, spec = null) {
+        const w = spec ? spec.w : this.planchaLargo;
+        const h = spec ? spec.h : this.planchaAncho;
+        const margin = spec && spec.refilado != null ? spec.refilado : this.refilado;
+        const usableW = Math.max(0, w - 2 * margin);
+        const usableH = Math.max(0, h - 2 * margin);
         return {
             id: sheetId,
-            w: this.planchaLargo,
-            h: this.planchaAncho,
+            w,
+            h,
             refilado: margin,
-            usableW: this.usableWidth(),
-            usableH: this.usableHeight(),
+            kerf: this.espesorSierra,
+            usableW,
+            usableH,
+            isRemnant: !!(spec && spec.remnantId),
+            remnantId: spec ? spec.remnantId || null : null,
             nextStripId: 1,
             placedParts: [],
             freeRects: [
                 {
                     x: margin,
                     y: margin,
-                    w: this.usableWidth(),
-                    h: this.usableHeight(),
+                    w: usableW,
+                    h: usableH,
                     stripId: 'sheet',
                     parentStripId: null,
                     role: 'sheet'
@@ -485,9 +617,12 @@ class CutOptimizer {
         };
     }
 
-    packWithStrategy(parts, strategy) {
-        const sorted = this.sortParts(parts, strategy.sort);
-        const sheets = [];
+    // remnants: retazos (canto ya limpio, sin refilado) que se llenan antes de abrir planchas nuevas
+    packWithStrategy(parts, strategy, remnants = []) {
+        const sorted = strategy.presorted ? this.cloneParts(parts) : this.sortParts(parts, strategy.sort);
+        const sheets = remnants.map((r, i) =>
+            this.createNewSheet('R' + (i + 1), { w: r.largo, h: r.ancho, refilado: 0, remnantId: r.id }));
+        let newSheets = 0;
         const unplacedParts = [];
 
         for (const part of sorted) {
@@ -505,7 +640,7 @@ class CutOptimizer {
             }
 
             if (!placed) {
-                const newSheet = this.createNewSheet(sheets.length + 1);
+                const newSheet = this.createNewSheet(++newSheets);
                 const placement = strategy.pack === 'strips'
                     ? this.findBestPlacementStrip(part, newSheet.freeRects, strategy.axis || 'H')
                     : this.findBestPlacement(part, newSheet.freeRects, strategy.fit);
@@ -513,16 +648,19 @@ class CutOptimizer {
                     this.placePartOnSheet(part, placement, newSheet, strategy.split);
                     sheets.push(newSheet);
                 } else {
+                    newSheets--;
                     unplacedParts.push({ ...part, unplacedReason: part.unplacedReason || 'no_space' });
                 }
             }
         }
 
-        for (const sheet of sheets) {
+        // Los retazos que no se usaron no forman parte del resultado
+        const used = sheets.filter(s => !s.isRemnant || s.placedParts.length > 0);
+        for (const sheet of used) {
             this.finalizeSheetCuts(sheet);
         }
 
-        return { sheets, unplacedParts, metrics: null };
+        return { sheets: used, unplacedParts, metrics: null };
     }
 
     findBestPlacementStrip(part, freeRects, axis) {
@@ -575,12 +713,19 @@ class CutOptimizer {
         const kerf = this.espesorSierra;
         const remW = freeRect.w - pW;
         const remH = freeRect.h - pH;
+        // Hay que cortar si queda material, aunque sea solo el ancho del kerf
+        const needRight = remW > OPT_EPS;
+        const needBottom = remH > OPT_EPS;
+        // Queda sobrante reutilizable después del kerf
         const hasRight = remW > kerf + OPT_EPS;
         const hasBottom = remH > kerf + OPT_EPS;
 
-        if (hasRight && !hasBottom) return false; // vertical (solo derecha)
-        if (hasBottom && !hasRight) return true;  // horizontal (solo abajo)
-        if (!hasRight && !hasBottom) return null; // llenó el hueco
+        if (!needRight && !needBottom) return null; // llenó el hueco
+        if (!needBottom) return false; // solo corte vertical
+        if (!needRight) return true;   // solo corte horizontal
+        if (hasRight && !hasBottom) return false; // el sobrante útil queda a la derecha
+        if (hasBottom && !hasRight) return true;  // el sobrante útil queda abajo
+        if (!hasRight && !hasBottom) return true; // ambos restos son solo kerf
 
         if (splitRule === 'horizontal') return true;
         if (splitRule === 'vertical') return false;
@@ -675,7 +820,7 @@ class CutOptimizer {
                 });
             }
 
-            if (remW > kerf + OPT_EPS) {
+            if (remW > OPT_EPS) {
                 const cutX = freeRect.x + pW;
                 const childId = this.newStripId(sheet);
                 this.pushCut(sheet, {
@@ -693,19 +838,23 @@ class CutOptimizer {
                     leftoverStripId: null,
                     produces: {
                         keep: keepLabel,
-                        leftover: `sobrante ${Math.round(leftoverW)} × ${Math.round(pH)} mm`
+                        leftover: leftoverW > OPT_EPS
+                            ? `sobrante ${Math.round(leftoverW)} × ${Math.round(pH)} mm`
+                            : 'sin sobrante útil'
                     },
                     partName: part.name,
                     partId: part.id,
                     region: { x: freeRect.x, y: freeRect.y, w: freeRect.w, h: pH }
                 });
 
-                this.pushFreeRect(sheet, {
-                    x: freeRect.x + pW + kerf,
-                    y: freeRect.y,
-                    w: remW - kerf,
-                    h: pH
-                }, { stripId: childId, parentStripId: stripId, role: 'strip' });
+                if (remW > kerf + OPT_EPS) {
+                    this.pushFreeRect(sheet, {
+                        x: freeRect.x + pW + kerf,
+                        y: freeRect.y,
+                        w: remW - kerf,
+                        h: pH
+                    }, { stripId: childId, parentStripId: stripId, role: 'strip' });
+                }
             }
 
             if (remH > kerf + OPT_EPS) {
@@ -751,7 +900,7 @@ class CutOptimizer {
                 });
             }
 
-            if (remH > kerf + OPT_EPS) {
+            if (remH > OPT_EPS) {
                 const cutY = freeRect.y + pH;
                 const childId = this.newStripId(sheet);
                 this.pushCut(sheet, {
@@ -769,19 +918,23 @@ class CutOptimizer {
                     leftoverStripId: null,
                     produces: {
                         keep: keepLabel,
-                        leftover: `sobrante ${Math.round(pW)} × ${Math.round(leftoverH)} mm`
+                        leftover: leftoverH > OPT_EPS
+                            ? `sobrante ${Math.round(pW)} × ${Math.round(leftoverH)} mm`
+                            : 'sin sobrante útil'
                     },
                     partName: part.name,
                     partId: part.id,
                     region: { x: freeRect.x, y: freeRect.y, w: pW, h: freeRect.h }
                 });
 
-                this.pushFreeRect(sheet, {
-                    x: freeRect.x,
-                    y: cutY + kerf,
-                    w: pW,
-                    h: remH - kerf
-                }, { stripId: childId, parentStripId: stripId, role: 'strip' });
+                if (remH > kerf + OPT_EPS) {
+                    this.pushFreeRect(sheet, {
+                        x: freeRect.x,
+                        y: cutY + kerf,
+                        w: pW,
+                        h: remH - kerf
+                    }, { stripId: childId, parentStripId: stripId, role: 'strip' });
+                }
             }
 
             if (remW > kerf + OPT_EPS) {
@@ -816,11 +969,12 @@ class CutOptimizer {
     }
 
     finalizeSheetCuts(sheet) {
-        if (!sheet.cuts || sheet.cuts.length === 0) {
-            sheet.uniqueFenceCount = 0;
-            sheet.sequenceValid = true;
+        const pieceCuts = (sheet.cuts || []).filter(c => c.kind !== 'refilado');
+        if (pieceCuts.length === 0) {
+            this.setSheetCuts(sheet, []);
             return;
         }
+        sheet.cuts = pieceCuts;
 
         const childrenOf = {};
         for (const c of sheet.cuts) {
@@ -846,25 +1000,285 @@ class CutOptimizer {
             if (!visited.has(c)) ordered.push(c);
         }
 
-        ordered.forEach((c, idx) => {
-            c.seq = idx + 1;
-            c.desc = this.buildCutDesc(c, sheet);
-        });
-        sheet.cuts = ordered;
-        sheet.sequenceValid = true;
+        this.setSheetCuts(sheet, ordered);
+    }
 
+    // Guarda la secuencia final de la plancha: refilado primero, luego los cortes de piezas
+    setSheetCuts(sheet, pieceCuts) {
+        const cuts = this.buildTrimCuts(sheet).concat(pieceCuts);
+        cuts.forEach((c, idx) => {
+            c.seq = idx + 1;
+            if (c.kind !== 'refilado') c.desc = this.buildCutDesc(c, sheet);
+        });
+        sheet.cuts = cuts;
+        sheet.sequenceValid = true;
+        sheet.sequenceStale = false;
+        sheet.uniqueFenceCount = this.countFences(pieceCuts);
+    }
+
+    countFences(cuts) {
         const fences = new Set();
-        for (const c of sheet.cuts) {
+        for (const c of cuts) {
             if (c.kind === 'raja' && c.fenceMm) {
                 fences.add(Math.round(c.fenceMm));
             }
         }
         if (fences.size === 0) {
-            for (const c of sheet.cuts) {
+            for (const c of cuts) {
                 if (c.fenceMm) fences.add(Math.round(c.fenceMm));
             }
         }
-        sheet.uniqueFenceCount = fences.size;
+        return fences.size;
+    }
+
+    // Pasadas de refilado (antes de cualquier raja). No se cobran como metros de corte.
+    buildTrimCuts(sheet) {
+        const r = sheet.refilado != null ? sheet.refilado : this.refilado;
+        if (!(r > OPT_EPS)) return [];
+        const W = sheet.w;
+        const H = sheet.h;
+        const uW = CutOptimizer.round1(sheet.usableW);
+        const uH = CutOptimizer.round1(sheet.usableH);
+        const base = {
+            kind: 'refilado', level: 0, parentStripId: 'sheet',
+            stripId: null, leftoverStripId: null, region: null, produces: null
+        };
+        return [
+            {
+                ...base, axis: 'H', x1: 0, y1: r, x2: W, y2: r, fenceMm: null, fromEdge: 'ancho',
+                desc: `Refilado: recorta ~${r} mm de un borde largo para limpiar el canto de fábrica.`
+            },
+            {
+                ...base, axis: 'V', x1: r, y1: r, x2: r, y2: H, fenceMm: null, fromEdge: 'largo',
+                desc: `Refilado: recorta ~${r} mm de un borde corto, a escuadra con el borde ya limpio.`
+            },
+            {
+                ...base, axis: 'H', x1: r, y1: H - r, x2: W, y2: H - r, fenceMm: uH, fromEdge: 'ancho',
+                desc: `Refilado: tope a ${uH} mm desde el borde largo limpio. Queda el ancho útil.`
+            },
+            {
+                ...base, axis: 'V', x1: W - r, y1: r, x2: W - r, y2: H - r, fenceMm: uW, fromEdge: 'largo',
+                desc: `Refilado: tope a ${uW} mm desde el borde corto limpio. Queda el largo útil de ${uW} × ${uH} mm.`
+            }
+        ];
+    }
+
+    /**
+     * Reconstruye la secuencia de guillotina a partir de las posiciones actuales de las piezas
+     * (tras girar, quitar o colocar a mano). Devuelve { cuts, freeRects } o null si la
+     * distribución no se puede separar solo con cortes de lado a lado.
+     */
+    deriveGuillotine(sheet) {
+        const kerf = sheet.kerf != null ? sheet.kerf : this.espesorSierra;
+        const r = sheet.refilado != null ? sheet.refilado : this.refilado;
+        const root = { x: r, y: r, w: sheet.usableW, h: sheet.usableH };
+        const parts = sheet.placedParts;
+        const E = OPT_EPS;
+
+        const inside = (p, reg) => p.x >= reg.x - E && p.y >= reg.y - E &&
+            p.x + p.w <= reg.x + reg.w + E && p.y + p.h <= reg.y + reg.h + E;
+        if (!parts.every(p => inside(p, root))) return null;
+
+        const lo = (p, axis) => axis === 'V' ? p.x : p.y;
+        const hi = (p, axis) => axis === 'V' ? p.x + p.w : p.y + p.h;
+        const fills = (p, reg) => CutOptimizer.approxEq(p.x, reg.x) && CutOptimizer.approxEq(p.y, reg.y) &&
+            CutOptimizer.approxEq(p.w, reg.w) && CutOptimizer.approxEq(p.h, reg.h);
+
+        // Primera línea de lado a lado (la más cercana al inicio) que no atraviesa ninguna pieza
+        const findCut = (reg, ps, axis) => {
+            const start = axis === 'V' ? reg.x : reg.y;
+            const end = axis === 'V' ? reg.x + reg.w : reg.y + reg.h;
+            const cands = [];
+            for (const p of ps) {
+                cands.push(hi(p, axis), lo(p, axis) - kerf);
+            }
+            cands.sort((a, b) => a - b);
+            for (const c of cands) {
+                if (c <= start + E || c >= end - E) continue;
+                const kEnd = Math.min(c + kerf, end);
+                const crosses = ps.some(p => lo(p, axis) < kEnd - E && hi(p, axis) > c + E);
+                if (!crosses) return c;
+            }
+            return null;
+        };
+
+        const dims = reg => `${Math.round(reg.w)} × ${Math.round(reg.h)} mm`;
+        const describe = (reg, ps) => {
+            if (ps.length === 1 && fills(ps[0], reg)) {
+                return `${ps[0].name} (${CutOptimizer.round1(reg.w)}×${CutOptimizer.round1(reg.h)} mm)`;
+            }
+            return ps.length === 0 ? `sobrante ${dims(reg)}` : `tira ${dims(reg)}`;
+        };
+
+        const cuts = [];
+        const freeRects = [];
+        let idSeq = 0;
+        const nextId = () => `d${++idSeq}`;
+
+        const visit = (reg, ps, preferAxis, parentId, depth) => {
+            if (ps.length === 0) {
+                if (reg.w > E && reg.h > E) {
+                    freeRects.push({
+                        x: CutOptimizer.round1(reg.x), y: CutOptimizer.round1(reg.y),
+                        w: CutOptimizer.round1(reg.w), h: CutOptimizer.round1(reg.h),
+                        stripId: parentId, parentStripId: null, role: depth === 0 ? 'sheet' : 'strip'
+                    });
+                }
+                return true;
+            }
+            if (ps.length === 1 && fills(ps[0], reg)) return true;
+
+            const axes = preferAxis === 'H' ? ['H', 'V'] : ['V', 'H'];
+            for (const axis of axes) {
+                const c = findCut(reg, ps, axis);
+                if (c === null) continue;
+
+                const cutsBefore = cuts.length;
+                const freeBefore = freeRects.length;
+                let a;
+                let b;
+                if (axis === 'V') {
+                    a = { x: reg.x, y: reg.y, w: c - reg.x, h: reg.h };
+                    b = { x: c + kerf, y: reg.y, w: reg.x + reg.w - c - kerf, h: reg.h };
+                } else {
+                    a = { x: reg.x, y: reg.y, w: reg.w, h: c - reg.y };
+                    b = { x: reg.x, y: c + kerf, w: reg.w, h: reg.y + reg.h - c - kerf };
+                }
+                const hasB = (axis === 'V' ? b.w : b.h) > E;
+                const psA = ps.filter(p => hi(p, axis) <= c + E);
+                const psB = ps.filter(p => hi(p, axis) > c + E);
+                const fullSpan = axis === 'H' ? reg.w >= root.w - E : reg.h >= root.h - E;
+                const stripId = nextId();
+                const leftoverId = hasB ? nextId() : null;
+
+                cuts.push({
+                    x1: axis === 'V' ? c : reg.x,
+                    y1: axis === 'V' ? reg.y : c,
+                    x2: axis === 'V' ? c : reg.x + reg.w,
+                    y2: axis === 'V' ? reg.y + reg.h : c,
+                    axis,
+                    fenceMm: CutOptimizer.round1(c - (axis === 'V' ? reg.x : reg.y)),
+                    fromEdge: axis === 'H' ? 'ancho' : 'largo',
+                    kind: fullSpan ? 'raja' : 'traza',
+                    level: depth + 1,
+                    parentStripId: parentId,
+                    stripId,
+                    leftoverStripId: leftoverId,
+                    produces: {
+                        keep: describe(a, psA),
+                        leftover: hasB ? (psB.length ? `resto ${dims(b)}` : `sobrante ${dims(b)}`) : 'sin sobrante útil'
+                    },
+                    partName: psA[0] ? psA[0].name : '',
+                    partId: psA[0] ? psA[0].id : null,
+                    region: { x: reg.x, y: reg.y, w: reg.w, h: reg.h }
+                });
+
+                const other = axis === 'H' ? 'V' : 'H';
+                const ok = visit(a, psA, other, stripId, depth + 1) &&
+                    (!hasB || visit(b, psB, axis, leftoverId, depth));
+                if (ok) return true;
+                cuts.length = cutsBefore;
+                freeRects.length = freeBefore;
+            }
+            return false;
+        };
+
+        const sheetAxis = root.w >= root.h ? 'H' : 'V';
+        if (!visit(root, parts, sheetAxis, 'sheet', 0)) return null;
+        return { cuts, freeRects };
+    }
+
+    // Espacio libre (sin kerf alrededor de las piezas) como rectángulos sin solape.
+    // Se usa cuando la distribución manual no es guillotinable.
+    freeSpaceRects(sheet) {
+        const kerf = sheet.kerf != null ? sheet.kerf : this.espesorSierra;
+        const r = sheet.refilado != null ? sheet.refilado : this.refilado;
+        const X1 = r;
+        const Y1 = r;
+        const X2 = r + sheet.usableW;
+        const Y2 = r + sheet.usableH;
+        const E = OPT_EPS;
+        const blocks = sheet.placedParts.map(p => ({
+            x1: Math.max(X1, p.x - kerf), y1: Math.max(Y1, p.y - kerf),
+            x2: Math.min(X2, p.x + p.w + kerf), y2: Math.min(Y2, p.y + p.h + kerf)
+        }));
+        const ys = [...new Set([Y1, Y2, ...blocks.flatMap(b => [b.y1, b.y2])])]
+            .filter(y => y >= Y1 - E && y <= Y2 + E)
+            .sort((a, b) => a - b);
+
+        const rects = [];
+        let open = new Map();
+        for (let i = 0; i < ys.length - 1; i++) {
+            const ya = ys[i];
+            const yb = ys[i + 1];
+            if (yb - ya <= E) continue;
+            let intervals = [[X1, X2]];
+            for (const b of blocks) {
+                if (b.y1 >= yb - E || b.y2 <= ya + E) continue;
+                const next = [];
+                for (const [s, e] of intervals) {
+                    if (b.x2 <= s || b.x1 >= e) { next.push([s, e]); continue; }
+                    if (b.x1 > s + E) next.push([s, b.x1]);
+                    if (b.x2 < e - E) next.push([b.x2, e]);
+                }
+                intervals = next;
+            }
+            const nextOpen = new Map();
+            for (const [s, e] of intervals) {
+                if (e - s <= E) continue;
+                const key = `${CutOptimizer.round1(s)}|${CutOptimizer.round1(e)}`;
+                let rect = open.get(key);
+                if (rect && CutOptimizer.approxEq(rect.y + rect.h, ya)) {
+                    rect.h = yb - rect.y;
+                } else {
+                    rect = { x: s, y: ya, w: e - s, h: yb - ya, role: 'strip' };
+                    rects.push(rect);
+                }
+                nextOpen.set(key, rect);
+            }
+            open = nextOpen;
+        }
+        return rects
+            .map(rc => ({
+                x: CutOptimizer.round1(rc.x), y: CutOptimizer.round1(rc.y),
+                w: CutOptimizer.round1(rc.w), h: CutOptimizer.round1(rc.h),
+                stripId: null, parentStripId: null, role: 'strip'
+            }))
+            .filter(rc => rc.w > E && rc.h > E);
+    }
+
+    // Tras una edición manual: regenera cortes y sobrantes; si no es guillotinable, marca la secuencia como vencida
+    rebuildSheet(sheet) {
+        const derived = this.deriveGuillotine(sheet);
+        if (derived) {
+            sheet.freeRects = derived.freeRects;
+            this.setSheetCuts(sheet, derived.cuts);
+            return true;
+        }
+        sheet.freeRects = this.freeSpaceRects(sheet);
+        sheet.cuts = [];
+        sheet.sequenceValid = false;
+        sheet.sequenceStale = true;
+        sheet.uniqueFenceCount = 0;
+        return false;
+    }
+
+    // Coloca a mano una pieza sin ubicar en el mejor hueco de la plancha. Devuelve la pieza colocada o null.
+    placeOnSheet(part, sheet) {
+        const placement = this.findBestPlacement(part, sheet.freeRects, 'bssf');
+        if (!placement) return null;
+        const placed = {
+            ...part,
+            x: CutOptimizer.round1(placement.rect.x),
+            y: CutOptimizer.round1(placement.rect.y),
+            w: CutOptimizer.round1(placement.w),
+            h: CutOptimizer.round1(placement.h),
+            rotated: placement.rotated,
+            unplacedReason: null
+        };
+        sheet.placedParts.push(placed);
+        this.rebuildSheet(sheet);
+        return placed;
     }
 
     pushFreeRect(sheet, rect, meta = {}) {
@@ -884,8 +1298,7 @@ class CutOptimizer {
     }
 
     computeMetrics(sheets, unplacedParts) {
-        const margin = this.refilado;
-        const usableArea = this.usableWidth() * this.usableHeight();
+        let totalUsableArea = 0;
         let totalPlacedArea = 0;
         let totalCorteMetros = 0;
         let totalCantoDelgado = 0;
@@ -893,15 +1306,19 @@ class CutOptimizer {
         let totalGroovesLength = 0;
         let totalCutsCount = 0;
         let leftoverArea = 0;
+        const margenM = this.cantoMargenMm / 1000;
 
         for (const sheet of sheets) {
             let placedArea = 0;
+            const usableArea = CutOptimizer.sheetUsableArea(sheet);
+            totalUsableArea += usableArea;
 
             for (const p of sheet.placedParts) {
                 placedArea += p.w * p.h;
 
-                const largoM = p.largoNominal / 1000;
-                const anchoM = p.anchoNominal / 1000;
+                // Cada lado enchapado suma su largo + el despunte configurado
+                const largoM = p.largoNominal / 1000 + margenM;
+                const anchoM = p.anchoNominal / 1000 + margenM;
 
                 [p.cantos[0], p.cantos[1]].forEach(c => {
                     if (c === 1) totalCantoDelgado += largoM;
@@ -915,10 +1332,10 @@ class CutOptimizer {
 
                 if (p.grooves) {
                     [p.grooves[0], p.grooves[1]].forEach(g => {
-                        if (g === 1) totalGroovesLength += largoM;
+                        if (g === 1) totalGroovesLength += p.largoNominal / 1000;
                     });
                     [p.grooves[2], p.grooves[3]].forEach(g => {
-                        if (g === 1) totalGroovesLength += anchoM;
+                        if (g === 1) totalGroovesLength += p.anchoNominal / 1000;
                     });
                 }
             }
@@ -927,23 +1344,28 @@ class CutOptimizer {
             totalPlacedArea += placedArea;
 
             for (const r of sheet.freeRects) {
-                leftoverArea += r.w * r.h;
+                if (CutOptimizer.isUsefulLeftover(r)) leftoverArea += r.w * r.h;
             }
 
+            // El refilado se muestra en la secuencia pero no se cobra como corte de piezas
             let sheetCutsLength = 0;
+            let sheetCutsCount = 0;
             for (const cut of sheet.cuts) {
+                if (cut.kind === 'refilado') continue;
                 sheetCutsLength += (Math.abs(cut.x2 - cut.x1) + Math.abs(cut.y2 - cut.y1)) / 1000;
+                sheetCutsCount++;
             }
             totalCorteMetros += sheetCutsLength;
-            totalCutsCount += sheet.cuts.length;
+            totalCutsCount += sheetCutsCount;
         }
 
-        const totalUsableArea = sheets.length * usableArea;
         const globalEfficiency = totalUsableArea > 0 ? (totalPlacedArea / totalUsableArea) * 100 : 0;
 
         return {
             globalEfficiency: Math.round(globalEfficiency * 10) / 10,
             sheetsCount: sheets.length,
+            newSheetsCount: sheets.filter(s => !s.isRemnant).length,
+            remnantsUsed: sheets.filter(s => s.isRemnant).length,
             totalCutsLength: CutOptimizer.round1(totalCorteMetros),
             totalCutsCount,
             cantoDelgado: CutOptimizer.round1(totalCantoDelgado),
@@ -960,6 +1382,4 @@ class CutOptimizer {
     }
 }
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CutOptimizer };
-}
+export { CutOptimizer, OPT_EPS };

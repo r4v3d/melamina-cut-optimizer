@@ -1,31 +1,19 @@
 // Renderizador del Mapa de Corte con HTML5 Canvas - MelaminaCut
 
-// Helper to convert HEX color to RGBA
-function hexToRgba(hex, alpha) {
-    if (!hex) return `rgba(6, 182, 212, ${alpha})`;
-    hex = hex.replace('#', '');
-    if (hex.length === 3) {
-        hex = hex.split('').map(char => char + char).join('');
-    }
-    const r = parseInt(hex.substring(0, 2), 16) || 6;
-    const g = parseInt(hex.substring(2, 4), 16) || 182;
-    const b = parseInt(hex.substring(4, 6), 16) || 212;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+import { escapeHtml, hexToRgba } from './utils.js';
+import { CutOptimizer } from './optimizer.js';
 
-function escapeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-class CutMapCanvas {
-    constructor(canvasId, containerId) {
+export class CutMapCanvas {
+    // options.onEdit({ type: 'rotate' | 'remove', part }) se llama tras una edición manual
+    // options.onNotice(mensaje) muestra avisos (por defecto alert)
+    constructor(canvasId, options = {}) {
         this.canvas = document.getElementById(canvasId);
         if (!this.canvas) return;
+        this.onEdit = options.onEdit || null;
+        this.notify = options.onNotice || (msg => alert(msg));
+        this.onHoverPart = options.onHoverPart || null; // (pieza | null) al pasar el mouse
+        this.highlightRowId = null; // resalta las piezas de una fila de la tabla
+        this.grooveSpec = { offset: 15, width: 4, depth: 8 };
         this.ctx = this.canvas.getContext('2d');
         this.wrapper = this.canvas.parentElement;
         if (this.wrapper) {
@@ -133,6 +121,14 @@ class CutMapCanvas {
             }
         });
 
+        this.wrapper.addEventListener('mouseleave', () => {
+            if (this.hoveredPart && this.onHoverPart) this.onHoverPart(null);
+            this.hoveredPart = null;
+            this.hoveredRect = null;
+            if (this.tooltipEl) this.tooltipEl.style.opacity = '0';
+            this.render();
+        });
+
         this.wrapper.addEventListener('mousemove', (e) => {
             if (this.isDragging) {
                 this.panX = e.clientX - this.startX;
@@ -145,6 +141,8 @@ class CutMapCanvas {
 
         // Zoom with wheel
         this.wrapper.addEventListener('wheel', (e) => {
+            // Sin Ctrl la rueda hace scroll de la página (salvo en pantalla completa)
+            if (!e.ctrlKey && !this.wrapper.closest('.fullscreen-map')) return;
             e.preventDefault();
             const zoomFactor = 1.1;
             
@@ -262,6 +260,12 @@ class CutMapCanvas {
 
     setSheet(sheet) {
         this.sheet = sheet;
+        this.hoveredPart = null;
+        this.hoveredRect = null;
+        if (!sheet) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            return;
+        }
         this.fitToScreen();
     }
 
@@ -349,6 +353,7 @@ class CutMapCanvas {
         
         // Trigger redrawing if hover state changes
         if (this.hoveredPart !== foundPart || this.hoveredRect !== foundRect) {
+            if (this.hoveredPart !== foundPart && this.onHoverPart) this.onHoverPart(foundPart);
             this.hoveredPart = foundPart;
             this.hoveredRect = foundRect;
             this.render();
@@ -433,12 +438,14 @@ class CutMapCanvas {
                     <p>Giro permitido (Veta): <strong>${foundPart.veta ? 'No (Fijo)' : 'Sí (Rotable)'}</strong></p>
                     <p>Rotado en corte: <strong>${foundPart.rotated ? 'Sí (90°)' : 'No'}</strong></p>
                     ${cantoDesc.length > 0 ? `<p style="margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 4px;">${cantoDesc.join('<br>')}</p>` : ''}
+                    ${this.grooveTooltip(foundPart)}
                 `;
             } else {
+                const useful = CutOptimizer.isUsefulLeftover(foundRect);
                 this.tooltipEl.innerHTML = `
-                    <h4>Sobrante Útil</h4>
+                    <h4>${useful ? 'Sobrante útil' : 'Merma (retazo muy pequeño)'}</h4>
                     <p>Medidas: <strong>${Math.round(foundRect.w)} x ${Math.round(foundRect.h)} mm</strong></p>
-                    <p>Área: <strong>${Math.round((foundRect.w * foundRect.h) / 100) / 100} cm²</strong></p>
+                    <p>Área: <strong>${((foundRect.w * foundRect.h) / 1e6).toFixed(3)} m²</strong></p>
                 `;
             }
 
@@ -513,9 +520,7 @@ class CutMapCanvas {
         ctx.strokeRect(0, 0, this.sheet.w, this.sheet.h);
         
         // 2. Draw refilado margins (perimeter trim border)
-        const refiladoVal = this.sheet.refilado != null
-            ? this.sheet.refilado
-            : parseFloat(document.getElementById('input-refilado')?.value) || 0;
+        const refiladoVal = this.sheet.refilado != null ? this.sheet.refilado : 0;
         if (refiladoVal > 0) {
             ctx.strokeStyle = isPrintMode ? '#94a3b8' : (isLightTheme ? 'rgba(239, 68, 68, 0.5)' : 'rgba(239, 68, 68, 0.4)');
             ctx.lineWidth = 1;
@@ -553,7 +558,7 @@ class CutMapCanvas {
                 const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
                 let fontSize = Math.min(Math.round(r.h * 0.15), Math.round(r.w * 0.08));
                 fontSize = Math.min(Math.max(fontSize, isPrintMode ? 14 : 12), 24);
-                const leftoverUse = (r.w * r.h) >= 100000 ? 'guardar' : 'leña';
+                const leftoverUse = CutOptimizer.isUsefulLeftover(r) ? 'guardar' : 'leña';
                 
                 ctx.fillStyle = isPrintMode ? '#000000' : (isLightTheme ? '#475569' : 'rgba(255, 255, 255, 0.85)');
                 ctx.font = `bold ${fontSize}px ${fontStack}`;
@@ -604,6 +609,16 @@ class CutMapCanvas {
             // Draw grooves (surcos)
             this.drawGrooves(ctx, p, isPrintMode);
             
+            // Pieza de la fila resaltada en la tabla
+            if (!isPrintMode && this.highlightRowId && p.rowId === this.highlightRowId) {
+                ctx.save();
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = '#facc15';
+                ctx.lineWidth = Math.max(4, 3 / scale);
+                ctx.strokeRect(p.x, p.y, p.w, p.h);
+                ctx.restore();
+            }
+
             // Draw part label (Name & Dimensions)
             this.drawPartLabels(ctx, p, isPrintMode, isHovered);
             if (p.veta) this.drawGrainArrow(ctx, p, isPrintMode);
@@ -637,7 +652,8 @@ class CutMapCanvas {
             }
             ctx.stroke();
 
-            if (isPrintMode || isActive) {
+            // En el plano impreso las pasadas de refilado van sin etiqueta (están en la lista de pasos)
+            if ((isPrintMode && cut.kind !== 'refilado') || isActive) {
                 this.drawFenceLabel(ctx, cut, isPrintMode, isActive);
             }
             ctx.restore();
@@ -654,7 +670,9 @@ class CutMapCanvas {
         const mx = (cut.x1 + cut.x2) / 2;
         const my = (cut.y1 + cut.y2) / 2;
         const fence = Math.round((cut.fenceMm || 0) * 10) / 10;
-        const text = `tope ${fence} mm`;
+        const text = cut.kind === 'refilado'
+            ? (cut.fenceMm ? `refilado · tope ${fence} mm` : 'refilado')
+            : `tope ${fence} mm`;
         ctx.save();
         ctx.font = `bold ${isPrintMode ? 18 : 22}px 'Plus Jakarta Sans', sans-serif`;
         ctx.textAlign = 'center';
@@ -958,7 +976,8 @@ class CutMapCanvas {
         ctx.restore();
     }
 
-    getHighResDataURL(targetWidth = 3000) {
+    // type 'image/jpeg' genera archivos mucho más livianos (útil para el PDF)
+    getHighResDataURL(targetWidth = 3000, type = 'image/png', quality) {
         if (!this.sheet) return null;
         
         const aspect = this.sheet.h / this.sheet.w;
@@ -974,7 +993,16 @@ class CutMapCanvas {
         // Render in high resolution with white background (print mode = true)
         this.drawToContext(eCtx, targetWidth, targetHeight, scale, 0, 0, true);
         
-        return exportCanvas.toDataURL('image/png');
+        return exportCanvas.toDataURL(type, quality);
+    }
+
+    // Imagen pequeña de cualquier plancha sin cambiar la vista actual
+    renderThumbnail(sheet, width = 220) {
+        const prev = this.sheet;
+        this.sheet = sheet;
+        const url = this.getHighResDataURL(width, 'image/jpeg', 0.8);
+        this.sheet = prev;
+        return url;
     }
 
     downloadImage() {
@@ -994,18 +1022,21 @@ class CutMapCanvas {
     // Dibujo de Surcos/Ranuras
     drawGrooves(ctx, p, isPrintMode) {
         if (!p.grooves) return;
-        
-        const grooveOffset = parseFloat(document.getElementById('input-groove-offset')?.value) || 15;
-        
+
+        // El surco empieza a "offset" mm del borde y tiene "width" mm de ancho (el canvas está en mm)
+        const { offset, width } = this.grooveSpec;
+        const grooveWidth = Math.max(width, 1);
+        const grooveOffset = offset + grooveWidth / 2;
+
         const gLeft = p.rotated ? p.grooves[0] : p.grooves[2];
         const gRight = p.rotated ? p.grooves[1] : p.grooves[3];
         const gTop = p.rotated ? p.grooves[2] : p.grooves[0];
         const gBottom = p.rotated ? p.grooves[3] : p.grooves[1];
-        
+
         ctx.save();
-        ctx.strokeStyle = isPrintMode ? '#78350f' : '#d97706'; // marrón / oro
-        ctx.lineWidth = isPrintMode ? 2 : 2.5;
-        ctx.setLineDash([2, 3]);
+        ctx.strokeStyle = isPrintMode ? 'rgba(120, 53, 15, 0.7)' : 'rgba(217, 119, 6, 0.8)'; // marrón / oro
+        ctx.lineWidth = grooveWidth;
+        ctx.setLineDash([]);
         
         if (gTop) {
             ctx.beginPath();
@@ -1032,6 +1063,14 @@ class CutMapCanvas {
             ctx.stroke();
         }
         ctx.restore();
+    }
+
+    grooveTooltip(part) {
+        const labels = ['L1', 'L2', 'A1', 'A2'];
+        const edges = (part.grooves || []).map((g, i) => (g ? labels[i] : null)).filter(Boolean);
+        if (!edges.length) return '';
+        const { offset, width, depth } = this.grooveSpec;
+        return `<p>Surcos: <strong>${edges.join(', ')}</strong> (a ${offset} mm, ${width} × ${depth} mm)</p>`;
     }
 
     // Gestión del Menú Contextual flotante en Canvas
@@ -1173,23 +1212,22 @@ class CutMapCanvas {
         if (!this.sheet) return;
 
         if (part.veta) {
-            alert("No se puede girar esta pieza: la veta está activa y el giro contradice la veta de la plancha.");
+            this.notify("No se puede girar esta pieza: tiene veta y el giro la contradice.");
             return;
         }
         
         const newW = part.h;
         const newH = part.w;
-        const refiladoVal = this.sheet.refilado != null
-            ? this.sheet.refilado
-            : parseFloat(document.getElementById('input-refilado')?.value) || 10;
-        const kerf = parseFloat(document.getElementById('input-sierra-espesor')?.value) || 4;
+        // Usar los valores con los que se optimizó la plancha, no los inputs actuales
+        const refiladoVal = this.sheet.refilado != null ? this.sheet.refilado : 10;
+        const kerf = this.sheet.kerf != null ? this.sheet.kerf : 4;
         
         // 1. Validar bordes útil plancha
         const limitX = this.sheet.w - refiladoVal;
         const limitY = this.sheet.h - refiladoVal;
         
         if (part.x + newW > limitX + 0.2 || part.y + newH > limitY + 0.2) {
-            alert("No se puede rotar esta pieza: supera los límites útiles de la plancha.");
+            this.notify("No se puede girar esta pieza: se sale del área útil de la plancha.");
             return;
         }
         
@@ -1205,51 +1243,34 @@ class CutMapCanvas {
             );
             
             if (collision) {
-                alert("No se puede rotar esta pieza: colisiona con otras piezas o no deja espacio de sierra.");
+                this.notify("No se puede girar esta pieza: choca con otra pieza o no deja espacio para la sierra.");
                 return;
             }
         }
         
-        // 3. Aplicar rotación
+        // 3. Aplicar rotación; quien escucha regenera cortes, sobrantes y métricas
         part.w = newW;
         part.h = newH;
         part.rotated = !part.rotated;
-        this.invalidateSequence();
-        
-        // Disparar evento personalizado en el ámbito global para actualizar estadísticas
-        if (window.onCanvasPartModified) {
-            window.onCanvasPartModified();
+        this.resetCutHighlight();
+        if (this.onEdit) {
+            this.onEdit({ type: 'rotate', part });
         } else {
             this.render();
         }
     }
 
-    invalidateSequence() {
-        if (!this.sheet) return;
-        this.sheet.cuts = [];
-        this.sheet.sequenceStale = true;
-        this.sheet.sequenceValid = false;
+    resetCutHighlight() {
         this.activeCutIndex = -1;
         this.completedCutIndex = -1;
     }
 
-    // Remoción manual
+    // Remoción manual: la pieza pasa a "sin colocar"
     removePartManually(part) {
         if (!this.sheet) return;
-
-        // Devolver el hueco de la pieza como sobrante útil
-        if (part.w > 0 && part.h > 0) {
-            this.sheet.freeRects.push({
-                x: part.x,
-                y: part.y,
-                w: part.w,
-                h: part.h
-            });
-        }
-        this.invalidateSequence();
-        
-        if (window.onCanvasPartRemoved) {
-            window.onCanvasPartRemoved(part);
+        this.resetCutHighlight();
+        if (this.onEdit) {
+            this.onEdit({ type: 'remove', part });
         } else {
             this.sheet.placedParts = this.sheet.placedParts.filter(p => p !== part);
             this.render();
