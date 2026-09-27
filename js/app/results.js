@@ -10,6 +10,7 @@ import { loadCutProgress, renderCutSequence, updateCutWizardUI } from './sequenc
 import { toast, confirmDialog } from './ui-feedback.js';
 import { computeQuote } from '../quote-calc.js';
 import { materialsStore } from './store.js';
+import { isPro } from './plan.js';
 
 const UNPLACED_REASONS = {
     too_large: 'No cabe en la plancha (ni rotada)',
@@ -45,9 +46,9 @@ export function clearResults() {
     dom.unplacedContainer.style.display = 'none';
 }
 
-// Precio de plancha nueva: el del catálogo o, si el material no está, el "Costo Plancha" del sidebar
+// Precio de plancha nueva: el del catálogo (Pro) o, si no, el "Costo Plancha" del sidebar
 export function priceForMaterial(name, costs = readCosts()) {
-    const m = materialsStore.byName(name);
+    const m = isPro() ? materialsStore.byName(name) : null;
     return m && Number(m.precio) >= 0 ? Number(m.precio) : costs.plancha;
 }
 

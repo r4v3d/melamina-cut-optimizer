@@ -5,6 +5,8 @@ import { parseImportText } from './import-parser.js';
 import { buildFurniture, FURNITURE_TEMPLATES } from './furniture-templates.js';
 import { cutListCsv, sheetDxf } from './exporters.js';
 import { computeQuote } from './quote-calc.js';
+import { verifyLicense } from './license.js';
+import { generateKeyPairSync, sign } from 'node:crypto';
 
 function makeOpt(extra = {}) {
     return new CutOptimizer({
@@ -26,6 +28,12 @@ function expand(parts) {
 let passed = 0;
 function test(name, fn) {
     fn();
+    passed++;
+    console.log('  ok  ' + name);
+}
+
+async function testAsync(name, fn) {
+    await fn();
     passed++;
     console.log('  ok  ' + name);
 }
@@ -473,6 +481,40 @@ test('cotización: precio por material, retazos gratis, margen e impuesto', () =
     assert.ok(Math.abs(q.total - expectedBase * 1.2 * 1.18) < 1e-9);
     const sumLines = q.lines.reduce((s, l) => s + l.amount, 0);
     assert.ok(Math.abs(sumLines - q.subtotal) < 0.05, 'las líneas suman el subtotal');
+});
+
+// Licencias: par de claves temporal, independiente de la clave real del vendedor
+const licKeys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+const licPublic = licKeys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+const b64u = b => Buffer.from(b).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function makeLicense(data, key = licKeys.privateKey) {
+    const signed = `MC1.${b64u(JSON.stringify(data))}`;
+    return `${signed}.${b64u(sign('sha256', Buffer.from(signed), { key, dsaEncoding: 'ieee-p1363' }))}`;
+}
+
+await testAsync('licencias: válida, alterada, vencida, de otra clave y basura', async () => {
+    const now = new Date(2026, 8, 25).getTime();
+    const data = { p: 'pro', n: 'Ana Pérez', e: '2026-10-25', i: '2026-09-25', id: 'ab12' };
+    const ok = await verifyLicense(makeLicense(data), licPublic, now);
+    assert.strictEqual(ok.valid, true);
+    assert.strictEqual(ok.name, 'Ana Pérez');
+    assert.strictEqual(ok.daysLeft, 31);
+
+    // Cambiar el nombre (o la fecha) invalida la firma
+    const code = makeLicense(data);
+    const [pre, , sig] = code.split('.');
+    const forged = `${pre}.${b64u(JSON.stringify({ ...data, e: '2099-12-31' }))}.${sig}`;
+    assert.strictEqual((await verifyLicense(forged, licPublic, now)).reason, 'firma');
+
+    const expired = await verifyLicense(makeLicense({ ...data, e: '2026-09-24' }), licPublic, now);
+    assert.strictEqual(expired.valid, false);
+    assert.strictEqual(expired.reason, 'vencida');
+    assert.strictEqual(expired.name, 'Ana Pérez');
+
+    const other = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    assert.strictEqual((await verifyLicense(makeLicense(data, other.privateKey), licPublic, now)).reason, 'firma');
+    assert.strictEqual((await verifyLicense('hola mundo', licPublic, now)).reason, 'formato');
+    assert.strictEqual((await verifyLicense(` ${code}\n`, licPublic, now)).valid, true, 'tolera espacios al pegar');
 });
 
 test('importador: columnas opcionales de material, veta y cantos', () => {
