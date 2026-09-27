@@ -8,6 +8,7 @@ import { applyProjectState, collectProjectState, optimizeIfParts, saveStateToLoc
 import { addNewRow } from './parts-table.js';
 import { clearResults } from './results.js';
 import { toast, confirmDialog } from './ui-feedback.js';
+import { requirePro } from './plan.js';
 
 const FILE_FORMAT = 'melaminacut-project';
 
@@ -130,6 +131,7 @@ export function openProjects() {
     body.addEventListener('click', async (e) => {
         const act = e.target.dataset.act;
         const id = e.target.closest('tr')?.dataset.id;
+        if ((act === 'new' || act === 'dup') && !requirePro('projects')) return;
         if (act === 'new') {
             newProject();
             modal.close();
@@ -157,8 +159,9 @@ export function openProjects() {
     });
     body.querySelector('input[data-act="import"]').addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) importProjectFile(file, () => modal.close());
         e.target.value = '';
+        if (!file || !requirePro('projects')) return;
+        importProjectFile(file, () => modal.close());
     });
 }
 

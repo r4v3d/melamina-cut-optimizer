@@ -8,6 +8,7 @@ import { openModal, downloadFile, safeFileName } from './modal.js';
 import { tallerStore } from './store.js';
 import { currentQuote } from './results.js';
 import { toast } from './ui-feedback.js';
+import { isPro } from './plan.js';
 
 const LOGO_MAX_PX = 400;
 
@@ -52,7 +53,7 @@ export function openTallerProfile() {
         <div class="form-group"><label for="tp-dir">Dirección</label><input id="tp-dir" class="form-input" value="${escapeHtml(t.direccion)}"></div>
         <div class="form-row">
             <div class="form-group col-6"><label for="tp-validez">Validez de la cotización (días)</label><input id="tp-validez" type="number" min="1" class="form-input" value="${escapeHtml(t.validezDias)}"></div>
-            <div class="form-group col-6"><label>Logo (PNG/JPG)</label>
+            <div class="form-group col-6"><label>Logo (PNG/JPG) <span class="pro-tag">PRO</span></label>
                 <div class="logo-row">
                     <img class="logo-preview" alt="Logo del taller" ${logo.logo ? `src="${logo.logo}"` : 'hidden'}>
                     <label class="btn btn-secondary btn-sm import-file-label">Subir logo<input type="file" accept="image/png,image/jpeg" hidden id="tp-logo"></label>
@@ -157,16 +158,27 @@ function buildQuotePdf() {
     const RIGHT = 210 - M;
     let y = 15;
 
+    const pro = isPro();
+    // Plan gratis: marca de agua diagonal y pie de página; Pro: logo y sin marca
     const footer = () => {
+        if (!pro) {
+            doc.saveGraphicsState();
+            doc.setGState(new doc.GState({ opacity: 0.07 }));
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(46);
+            doc.setTextColor('#0f172a');
+            doc.text('MelaminaCut · versión gratuita', 105, 170, { align: 'center', angle: 35 });
+            doc.restoreGraphicsState();
+        }
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor('#94a3b8');
-        doc.text('Cotización generada con MelaminaCut', 105, 290, { align: 'center' });
+        doc.text(pro ? 'Cotización generada con MelaminaCut' : 'Cotización generada con la versión gratuita de MelaminaCut', 105, 290, { align: 'center' });
     };
 
-    // Encabezado: logo y datos del taller
+    // Encabezado: logo (Pro) y datos del taller
     let logoH = 0;
-    if (t.logo && t.logoW && t.logoH) {
+    if (pro && t.logo && t.logoW && t.logoH) {
         const maxW = 45;
         const maxH = 24;
         const scale = Math.min(maxW / t.logoW, maxH / t.logoH);

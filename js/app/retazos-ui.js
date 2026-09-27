@@ -7,6 +7,7 @@ import { CutOptimizer } from '../optimizer.js';
 import { openModal } from './modal.js';
 import { materialsStore, retazosStore } from './store.js';
 import { toast, confirmDialog } from './ui-feedback.js';
+import { requirePro } from './plan.js';
 
 function knownMaterials() {
     const names = new Set(materialsStore.list().map(m => m.name));
@@ -25,6 +26,7 @@ function fmtDate(iso) {
 }
 
 export function openRetazos() {
+    if (!requirePro('retazos')) return;
     const body = document.createElement('div');
     body.innerHTML = `
         <p class="modal-help">Los retazos se usan antes que las planchas nuevas si activas
@@ -117,6 +119,7 @@ export function openRetazos() {
 
 // Descuenta los retazos usados en el resultado y guarda los sobrantes útiles que deja el corte
 export async function registerInventory() {
+    if (!requirePro('retazos')) return;
     const results = state.results;
     if (!results) {
         toast('Optimice primero.', { type: 'warn' });
@@ -167,4 +170,7 @@ export async function registerInventory() {
 export function initRetazosUi() {
     dom.btnRetazos.addEventListener('click', openRetazos);
     dom.btnRegisterInventory.addEventListener('click', registerInventory);
+    dom.checkUsarRetazos.addEventListener('change', () => {
+        if (dom.checkUsarRetazos.checked && !requirePro('retazos')) dom.checkUsarRetazos.checked = false;
+    });
 }

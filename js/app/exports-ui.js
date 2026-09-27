@@ -5,12 +5,14 @@ import { state, currentSheet, sheetTitle } from './state.js';
 import { cutListCsv, sheetDxf } from '../exporters.js';
 import { downloadFile, safeFileName } from './modal.js';
 import { toast } from './ui-feedback.js';
+import { requirePro } from './plan.js';
 
 function projectSlug() {
     return safeFileName(dom.inputProjectName.value, 'proyecto');
 }
 
 function exportCsv() {
+    if (!requirePro('exports')) return;
     if (!state.results) {
         toast('Optimice primero.', { type: 'warn' });
         return;
@@ -19,6 +21,7 @@ function exportCsv() {
 }
 
 function exportDxf() {
+    if (!requirePro('exports')) return;
     const sheet = currentSheet();
     if (!sheet) {
         toast('Optimice primero.', { type: 'warn' });

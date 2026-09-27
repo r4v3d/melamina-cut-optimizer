@@ -1,0 +1,22 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Sin dependencias: las pruebas usan solo Node (assert, crypto)
+      - run: npm test
+      - name: Revisar sintaxis de los módulos
+        run: for f in js/*.js js/app/*.js sw.js tools/*.mjs; do node --check "$f"; done

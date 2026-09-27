@@ -1,0 +1,4 @@
+node_modules/
+# Claves privadas y registro de licencias: NUNCA subir al repositorio
+tools/keys/
+*.pem

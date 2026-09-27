@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "npx http-server -p 3000",
-    "test": "node js/optimizer.test.js"
+    "test": "node js/optimizer.test.js",
+    "licencia": "node tools/license.mjs"
   },
   "keywords": [
     "melamina",
