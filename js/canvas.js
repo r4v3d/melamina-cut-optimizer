@@ -134,129 +134,119 @@ export class CutMapCanvas {
             if (this.isDragging) {
                 this.panX = e.clientX - this.startX;
                 this.panY = e.clientY - this.startY;
-                this.render();
+                this.scheduleRender();
             } else {
                 this.handleMouseMove(e);
             }
         });
 
-        // Zoom with wheel
+        // Zoom con la rueda (con Ctrl, o libre en pantalla completa)
         this.wrapper.addEventListener('wheel', (e) => {
-            // Sin Ctrl la rueda hace scroll de la página (salvo en pantalla completa)
             if (!e.ctrlKey && !this.wrapper.closest('.fullscreen-map')) return;
             e.preventDefault();
-            const zoomFactor = 1.1;
-            
-            // Get mouse position relative to wrapper
             const rect = this.wrapper.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            
-            // Calculate virtual coordinates before zoom
-            const virtualX = (mouseX - this.panX) / this.scale;
-            const virtualY = (mouseY - this.panY) / this.scale;
-            
-            if (e.deltaY < 0) {
-                this.scale = Math.min(this.scale * zoomFactor, 10.0); // zoom in
-            } else {
-                this.scale = Math.max(this.scale / zoomFactor, 0.1);  // zoom out
-            }
-            
-            // Re-calculate pan to zoom towards mouse position
-            this.panX = mouseX - virtualX * this.scale;
-            this.panY = mouseY - virtualY * this.scale;
-            
-            this.render();
+            this.zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
         }, { passive: false });
 
-        // Touch support for mobile devices
-        let touchStartDist = 0;
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchStartTime = 0;
-        
+        // Táctil: con un dedo se hace scroll de la página (salvo con zoom aplicado, que mueve el mapa);
+        // con dos dedos se hace zoom. Los toques simples llegan como "click".
+        let pinchDist = 0;
+        let panTouch = null;
+        const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        const startPan = t => {
+            panTouch = this.isZoomedIn() ? { x: t.clientX - this.panX, y: t.clientY - this.panY } : null;
+        };
+
         this.wrapper.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                this.isDragging = true;
-                this.startX = e.touches[0].clientX - this.panX;
-                this.startY = e.touches[0].clientY - this.panY;
-                
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                touchStartTime = Date.now();
-                
+            if (e.touches.length === 2) {
+                pinchDist = dist(e.touches);
+                panTouch = null;
                 e.preventDefault();
-            } else if (e.touches.length === 2) {
-                touchStartDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
+            } else if (e.touches.length === 1) {
+                startPan(e.touches[0]);
+            }
+        }, { passive: false });
+
+        this.wrapper.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && pinchDist > 0) {
+                const d = dist(e.touches);
+                const rect = this.wrapper.getBoundingClientRect();
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                this.zoomAt(midX, midY, d / pinchDist);
+                pinchDist = d;
+                e.preventDefault();
+            } else if (e.touches.length === 1 && panTouch) {
+                this.panX = e.touches[0].clientX - panTouch.x;
+                this.panY = e.touches[0].clientY - panTouch.y;
+                this.scheduleRender();
                 e.preventDefault();
             }
         }, { passive: false });
 
         this.wrapper.addEventListener('touchend', (e) => {
-            if (this.isDragging) {
-                this.isDragging = false;
-                
-                // Detect tap: duration < 300ms and movement < 10px
-                const touchEndX = e.changedTouches[0]?.clientX || touchStartX;
-                const touchEndY = e.changedTouches[0]?.clientY || touchStartY;
-                const duration = Date.now() - touchStartTime;
-                const distance = Math.hypot(touchEndX - touchStartX, touchEndY - touchStartY);
-                
-                if (duration < 300 && distance < 10) {
-                    this.handleTap(touchEndX, touchEndY);
-                }
+            if (e.touches.length === 1) {
+                pinchDist = 0;
+                startPan(e.touches[0]);
+            } else if (e.touches.length === 0) {
+                pinchDist = 0;
+                panTouch = null;
             }
+            this.updateTouchAction();
         });
-
-        this.wrapper.addEventListener('touchmove', (e) => {
-            if (this.isDragging && e.touches.length === 1) {
-                this.panX = e.touches[0].clientX - this.startX;
-                this.panY = e.touches[0].clientY - this.startY;
-                this.render();
-                e.preventDefault();
-            } else if (e.touches.length === 2) {
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const ratio = dist / touchStartDist;
-                touchStartDist = dist;
-                
-                // Zoom center calculation for two fingers:
-                // Find midpoint of touches
-                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                
-                // Get virtual midpoint coordinates relative to wrapper before zoom
-                const rect = this.wrapper.getBoundingClientRect();
-                const relativeMidX = midX - rect.left;
-                const relativeMidY = midY - rect.top;
-                const virtualMidX = (relativeMidX - this.panX) / this.scale;
-                const virtualMidY = (relativeMidY - this.panY) / this.scale;
-                
-                // Adjust scale
-                this.scale = Math.max(0.1, Math.min(10.0, this.scale * ratio));
-                
-                // Re-calculate pan to zoom towards finger midpoint
-                this.panX = relativeMidX - virtualMidX * this.scale;
-                this.panY = relativeMidY - virtualMidY * this.scale;
-                
-                this.render();
-                e.preventDefault();
-            }
-        }, { passive: false });
 
         this.canvas.addEventListener('click', (e) => {
             if (this.isDragging) return;
             this.handleTap(e.clientX, e.clientY);
         });
 
-        window.addEventListener('resize', () => {
+        // Reajustar solo si cambia el tamaño real del mapa (en el celular, la barra del navegador
+        // dispara "resize" al hacer scroll y antes eso redibujaba y perdía el zoom)
+        let lastW = this.wrapper.clientWidth;
+        let lastH = this.wrapper.clientHeight;
+        const onResize = () => {
+            const w = this.wrapper.clientWidth;
+            const h = this.wrapper.clientHeight;
+            if (w === lastW && h === lastH) return;
+            lastW = w;
+            lastH = h;
             this.fitToScreen();
+        };
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(onResize).observe(this.wrapper);
+        } else {
+            window.addEventListener('resize', onResize);
+        }
+    }
+
+    // Agrupa varios pedidos de redibujo en uno por cuadro de pantalla
+    scheduleRender() {
+        if (this.renderQueued) return;
+        this.renderQueued = true;
+        requestAnimationFrame(() => {
+            this.renderQueued = false;
+            this.render();
         });
+    }
+
+    isZoomedIn() {
+        return this.scale > (this.fitScale || this.scale) * 1.05;
+    }
+
+    // Sin zoom, el dedo hace scroll vertical de la página; con zoom, mueve el mapa
+    updateTouchAction() {
+        this.wrapper.style.touchAction = this.isZoomedIn() ? 'none' : 'pan-y';
+    }
+
+    // Zoom manteniendo fijo el punto (x, y) del contenedor
+    zoomAt(x, y, factor) {
+        const virtualX = (x - this.panX) / this.scale;
+        const virtualY = (y - this.panY) / this.scale;
+        this.scale = Math.max(0.1, Math.min(10.0, this.scale * factor));
+        this.panX = x - virtualX * this.scale;
+        this.panY = y - virtualY * this.scale;
+        this.updateTouchAction();
+        this.scheduleRender();
     }
 
     setSheet(sheet) {
@@ -280,33 +270,22 @@ export class CutMapCanvas {
         const scaleX = wrapperW / this.sheet.w;
         const scaleY = wrapperH / this.sheet.h;
         this.scale = Math.min(scaleX, scaleY, 1.5); // maximum scale 1.5x
+        this.fitScale = this.scale;
         
         // Center the sheet
         this.panX = (this.wrapper.clientWidth - this.sheet.w * this.scale) / 2;
         this.panY = (this.wrapper.clientHeight - this.sheet.h * this.scale) / 2;
-        
+
+        this.updateTouchAction();
         this.render();
     }
 
     zoom(direction) {
-        const factor = 1.25;
-        const centerW = this.wrapper.clientWidth / 2;
-        const centerH = this.wrapper.clientHeight / 2;
-        const virtualX = (centerW - this.panX) / this.scale;
-        const virtualY = (centerH - this.panY) / this.scale;
-
-        if (direction === 'in') {
-            this.scale = Math.min(this.scale * factor, 10.0);
-        } else if (direction === 'out') {
-            this.scale = Math.max(this.scale / factor, 0.1);
+        if (direction === 'in' || direction === 'out') {
+            this.zoomAt(this.wrapper.clientWidth / 2, this.wrapper.clientHeight / 2, direction === 'in' ? 1.25 : 1 / 1.25);
         } else {
             this.fitToScreen();
-            return;
         }
-
-        this.panX = centerW - virtualX * this.scale;
-        this.panY = centerH - virtualY * this.scale;
-        this.render();
     }
 
     handleMouseMove(e) {
@@ -357,7 +336,7 @@ export class CutMapCanvas {
             if (this.hoveredPart !== foundPart && this.onHoverPart) this.onHoverPart(foundPart);
             this.hoveredPart = foundPart;
             this.hoveredRect = foundRect;
-            this.render();
+            this.scheduleRender();
         }
         
         // Update tooltip
@@ -482,7 +461,7 @@ export class CutMapCanvas {
         if (!this.sheet) return;
         
         // Dynamically adjust canvas pixels based on container layout
-        const pixelRatio = window.devicePixelRatio || 1;
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         const width = this.wrapper.clientWidth;
         const height = this.wrapper.clientHeight;
         
@@ -917,6 +896,30 @@ export class CutMapCanvas {
         this.drawToContext(eCtx, targetWidth, targetHeight, scale, 0, 0, true);
         
         return exportCanvas.toDataURL(type, quality);
+    }
+
+    // Miniatura rápida: piezas como rectángulos de color, sin textos (para la tira de planchas)
+    drawThumbnail(canvasEl, sheet, cssWidth = 110) {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const cssHeight = Math.round(cssWidth * sheet.h / sheet.w);
+        canvasEl.width = Math.round(cssWidth * dpr);
+        canvasEl.height = Math.round(cssHeight * dpr);
+        canvasEl.style.width = `${cssWidth}px`;
+        canvasEl.style.height = `${cssHeight}px`;
+        const ctx = canvasEl.getContext('2d');
+        const k = (cssWidth * dpr) / sheet.w;
+        ctx.setTransform(k, 0, 0, k, 0, 0);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, sheet.w, sheet.h);
+        ctx.lineWidth = 1 / k;
+        for (const p of sheet.placedParts) {
+            ctx.fillStyle = hexToRgba(p.color || '#06b6d4', 0.85);
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.strokeStyle = '#0f172a';
+            ctx.strokeRect(p.x, p.y, p.w, p.h);
+        }
+        ctx.strokeStyle = '#475569';
+        ctx.strokeRect(0, 0, sheet.w, sheet.h);
     }
 
     // Imagen pequeña de cualquier plancha sin cambiar la vista actual

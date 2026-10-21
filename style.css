@@ -1933,7 +1933,8 @@ body.is-pro .pro-tag { display: none; }
     cursor: pointer;
 }
 
-.sheet-thumb img {
+.sheet-thumb img,
+.sheet-thumb-canvas {
     width: 110px;
     height: auto;
     border-radius: 4px;
@@ -2516,4 +2517,31 @@ body.workshop-active { overflow: hidden; }
     .workshop-checklist {
         display: none !important;
     }
+}
+
+/* ===== Rendimiento en celulares y tablets =====
+   El desenfoque de fondo (vidrio), las sombras grandes y las animaciones infinitas obligan
+   a repintar la pantalla en cada scroll; en táctiles se reemplazan por fondos sólidos. */
+@media (hover: none), (pointer: coarse), (max-width: 900px) {
+    * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .app-header,
+    .glass-card {
+        background: #121a2c;
+        box-shadow: none;
+        transition: none;
+    }
+
+    body.light-theme .app-header,
+    body.light-theme .glass-card {
+        background: #ffffff;
+    }
+
+    .glass-card:hover { transform: none; }
+    .btn-pulse { animation: none; }
+    #cut-map-canvas { box-shadow: none; transition: none; }
+    .canvas-scroll-wrapper { touch-action: pan-y; cursor: default; }
 }

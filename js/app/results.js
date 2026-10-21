@@ -243,6 +243,7 @@ function renderThumbnails() {
         return;
     }
     wrap.hidden = false;
+    const pending = [];
     group.sheets.forEach((sheet, i) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -251,9 +252,11 @@ function renderThumbnails() {
         btn.dataset.index = String(i);
         const eff = Math.round(sheet.efficiency || 0);
         btn.setAttribute('aria-label', `Plancha ${i + 1}: ${sheet.placedParts.length} piezas, ${eff}% de aprovechamiento`);
-        const img = document.createElement('img');
-        img.alt = '';
-        img.src = state.canvas.renderThumbnail(sheet, 220) || '';
+        // Lienzo liviano dibujado en diferido: no traba la pantalla tras cada recálculo
+        const img = document.createElement('canvas');
+        img.className = 'sheet-thumb-canvas';
+        img.setAttribute('aria-hidden', 'true');
+        pending.push(() => state.canvas.drawThumbnail(img, sheet, 110));
         const cap = document.createElement('span');
         cap.className = 'sheet-thumb-caption';
         cap.textContent = `${sheet.isRemnant ? 'Retazo' : i + 1} · ${eff}%${sheet.sequenceStale ? ' · ⚠' : ''}`;
@@ -266,6 +269,14 @@ function renderThumbnails() {
         });
         wrap.appendChild(btn);
     });
+    const idle = window.requestIdleCallback || (cb => setTimeout(cb, 16));
+    const drawNext = () => {
+        const job = pending.shift();
+        if (!job) return;
+        job();
+        idle(drawNext);
+    };
+    idle(drawNext);
 }
 
 function markActiveThumb() {
