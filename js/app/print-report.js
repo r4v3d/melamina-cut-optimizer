@@ -6,6 +6,7 @@ import { escapeHtml, cantosText, groovesText } from '../utils.js';
 import { readGrooveSpec } from './settings.js';
 import { anySequenceStale, cutKindLabel } from './sequence.js';
 import { toast } from './ui-feedback.js';
+import { isNativeApp } from './native.js';
 
 const fmt1 = n => Math.round(n * 10) / 10;
 
@@ -19,7 +20,8 @@ export function collectLabels() {
                     num: p.originalIndex !== undefined ? p.originalIndex + 1 : '',
                     name: p.name || 'Pieza',
                     cut: `${fmt1(p.w)}×${fmt1(p.h)}`,
-                    material: p.material || matName
+                    material: p.material || matName,
+                    nota: p.nota || ''
                 });
             });
         });
@@ -65,7 +67,7 @@ export function generatePrintReport() {
             let partsRows = '';
             (sheet.placedParts || []).forEach((p) => {
                 const num = p.originalIndex !== undefined ? p.originalIndex + 1 : '';
-                partsRows += `<tr><td>#${num}</td><td>${escapeHtml(p.name)}</td><td>${fmt1(p.w)}×${fmt1(p.h)}</td><td>${escapeHtml(p.largoNominal)}×${escapeHtml(p.anchoNominal)}</td><td>${escapeHtml(cantosText(p.cantos, false))}</td><td>${escapeHtml(groovesText(p.grooves))}</td></tr>`;
+                partsRows += `<tr><td>#${num}</td><td>${escapeHtml(p.name)}</td><td>${fmt1(p.w)}×${fmt1(p.h)}</td><td>${escapeHtml(p.largoNominal)}×${escapeHtml(p.anchoNominal)}</td><td>${escapeHtml(cantosText(p.cantos, false))}</td><td>${escapeHtml(groovesText(p.grooves))}</td><td>${escapeHtml(p.nota || '')}</td></tr>`;
             });
 
             section.innerHTML = `
@@ -78,7 +80,7 @@ export function generatePrintReport() {
                     ${cutsHtml}
                 </ol>
                 <table class="print-parts-table">
-                    <thead><tr><th>#</th><th>Nombre</th><th>Corte mm</th><th>Nominal</th><th>Cantos</th><th>Surcos</th></tr></thead>
+                    <thead><tr><th>#</th><th>Nombre</th><th>Corte mm</th><th>Nominal</th><th>Cantos</th><th>Surcos</th><th>Nota</th></tr></thead>
                     <tbody>${partsRows}</tbody>
                 </table>
                 ${hasGrooves ? `<p style="font-size: 10pt; color: #000; margin-top: 0.2cm;">${escapeHtml(grooveSpecText())}</p>` : ''}
@@ -97,6 +99,7 @@ export function generatePrintReport() {
                 <div class="label-name">${escapeHtml(l.name)}</div>
                 <div class="label-size">LxA corte ${escapeHtml(l.cut)} mm</div>
                 <div class="label-mat">${escapeHtml(l.material)}</div>
+                ${l.nota ? `<div class="label-mat">${escapeHtml(l.nota)}</div>` : ''}
             </div>
         `).join('');
         dom.printLabels.appendChild(page);
@@ -111,6 +114,11 @@ export function initPrintReport() {
     dom.btnPrintReport.addEventListener('click', () => {
         if (anySequenceStale()) {
             toast('Hay planchas con la secuencia de cortes desactualizada. Reoptimice antes de cortar.', { type: 'warn' });
+        }
+        if (isNativeApp) {
+            // El WebView de Android no imprime: se genera el PDF, que sí se puede imprimir o enviar
+            import('./export-pdf.js').then(m => m.exportPdf());
+            return;
         }
         generatePrintReport();
         window.print();

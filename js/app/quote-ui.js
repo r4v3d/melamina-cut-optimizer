@@ -9,6 +9,7 @@ import { tallerStore } from './store.js';
 import { currentQuote } from './results.js';
 import { toast } from './ui-feedback.js';
 import { isPro } from './plan.js';
+import { isNativeApp, shareNativeFile, openExternal } from './native.js';
 
 const LOGO_MAX_PX = 400;
 
@@ -222,6 +223,12 @@ function buildQuotePdf() {
     doc.setTextColor('#475569');
     doc.text(`Fecha: ${today.toLocaleDateString()}`, M, y);
     doc.text(`Válida hasta: ${validUntil.toLocaleDateString()}`, RIGHT, y, { align: 'right' });
+    const entrega = dom.inputDeliveryDate && dom.inputDeliveryDate.value;
+    if (entrega) {
+        const [yy, mm, dd] = entrega.split('-');
+        y += 5;
+        doc.text(`Entrega estimada: ${dd}/${mm}/${yy}`, M, y);
+    }
     y += 7;
 
     // Cliente
@@ -340,7 +347,7 @@ function buildQuotePdf() {
 function exportQuotePdf() {
     if (!canQuote()) return;
     const { doc, filename } = buildQuotePdf();
-    doc.save(filename);
+    downloadFile(filename, doc.output('blob'));
 }
 
 // Web Share con el PDF adjunto (celular); si no se puede, descarga el PDF y abre WhatsApp con el mensaje
@@ -348,6 +355,16 @@ async function shareQuote() {
     if (!canQuote()) return;
     const { doc, filename, summaryText } = buildQuotePdf();
     const blob = doc.output('blob');
+    if (isNativeApp) {
+        // App Android: menú "Compartir" con el PDF y el mensaje (WhatsApp, correo...)
+        try {
+            await shareNativeFile(filename, blob, { text: summaryText });
+        } catch (e) {
+            console.error(e);
+            toast('No se pudo compartir la cotización.', { type: 'error' });
+        }
+        return;
+    }
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -360,7 +377,7 @@ async function shareQuote() {
     downloadFile(filename, blob);
     const phone = dom.inputClientPhone.value.replace(/\D/g, '');
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(summaryText)}`;
-    window.open(url, '_blank', 'noopener');
+    openExternal(url);
     toast('Se descargó el PDF: adjúntalo en el chat de WhatsApp que se abrió.', { type: 'info', duration: 8000 });
 }
 

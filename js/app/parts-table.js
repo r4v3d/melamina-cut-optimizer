@@ -95,7 +95,10 @@ function createRowDOM(partData = {}) {
 
     tr.innerHTML = `
         <td class="row-num" data-label="#"></td>
-        <td data-label="Nombre"><input type="text" class="table-input part-name" placeholder="Ej. Lateral" value="${escapeHtml(name)}" aria-label="Nombre de la pieza"></td>
+        <td data-label="Nombre">
+            <input type="text" class="table-input part-name" placeholder="Ej. Lateral" value="${escapeHtml(name)}" aria-label="Nombre de la pieza">
+            <input type="text" class="table-input part-note" placeholder="Nota: lijar, refilar…" value="${escapeHtml(partData.nota || '')}" aria-label="Nota de proceso">
+        </td>
         <td data-label="Color"><input type="color" class="table-input part-color" value="${escapeHtml(color)}" title="Elegir Color de la pieza" aria-label="Color de la pieza"></td>
         <td data-label="Material">
             <select class="table-input part-material" style="font-weight: 500;" aria-label="Material">
@@ -302,6 +305,7 @@ export function getRowData(rowEl) {
     });
     return {
         name: rowEl.querySelector('.part-name').value.trim(),
+        nota: (rowEl.querySelector('.part-note')?.value || '').trim(),
         color: rowEl.querySelector('.part-color').value,
         material: rowEl.querySelector('.part-material').value,
         largo: parseFloat(rowEl.querySelector('.part-largo').value) || 0,

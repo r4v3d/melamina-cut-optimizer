@@ -517,6 +517,38 @@ await testAsync('licencias: válida, alterada, vencida, de otra clave y basura',
     assert.strictEqual((await verifyLicense(` ${code}\n`, licPublic, now)).valid, true, 'tolera espacios al pegar');
 });
 
+test('planchas del proyecto: cantidad limitada, sin nuevas → piezas sin stock', () => {
+    const parts = [{ name: 'Estante', largo: 800, ancho: 500, cant: 12, material: 'Blanco' }];
+    const sheets = { Blanco: { finite: [{ largo: 2440, ancho: 1830 }], unlimited: null } };
+    const r = makeOpt().optimize(parts, { sheets });
+    const g = r.groups['Blanco'];
+    assert.strictEqual(g.sheets.length, 1, 'solo hay una plancha disponible');
+    assert.ok(g.unplacedParts.length > 0);
+    assert.ok(g.unplacedParts.every(p => p.unplacedReason === 'no_stock'));
+    assert.strictEqual(g.sheets[0].refilado, 10, 'una plancha (no retazo) lleva refilado');
+
+    const conNuevas = makeOpt().optimize(parts, { sheets: { Blanco: { finite: [{ largo: 2440, ancho: 1830 }], unlimited: { largo: 2440, ancho: 1830 } } } });
+    assert.strictEqual(conNuevas.unplacedParts.length, 0);
+    assert.ok(conNuevas.groups['Blanco'].sheets.length >= 2);
+});
+
+test('planchas del proyecto: retazo gratis primero y plancha grande admite piezas grandes', () => {
+    const parts = [
+        { name: 'Chica', largo: 400, ancho: 300, cant: 1, material: 'M' },
+        { name: 'Grande', largo: 2700, ancho: 600, cant: 1, material: 'M' }
+    ];
+    // La plancha de 2800 × 700 queda llena con la pieza grande: la chica tiene que ir al retazo
+    const sheets = { M: { finite: [{ largo: 500, ancho: 400, isRemnant: true }, { largo: 2800, ancho: 700 }], unlimited: null } };
+    const r = makeOpt().optimize(parts, { sheets });
+    const g = r.groups['M'];
+    assert.strictEqual(g.unplacedParts.length, 0, 'la pieza de 2700 entra en la plancha de 2800');
+    const retazo = g.sheets.find(s => s.isRemnant);
+    assert.ok(retazo && retazo.placedParts.some(p => p.name === 'Chica'));
+    assert.strictEqual(retazo.refilado, 0);
+    assert.strictEqual(r.metrics.remnantsUsed, 1);
+    assert.strictEqual(r.metrics.newSheetsCount, 1);
+});
+
 test('importador: columnas opcionales de material, veta y cantos', () => {
     const txt = [
         'Largo\tAncho\tCant\tNombre\tMaterial\tVeta\tCantos',
@@ -528,7 +560,7 @@ test('importador: columnas opcionales de material, veta y cantos', () => {
     assert.strictEqual(parts.length, 3, 'la fila de encabezado se ignora');
     assert.deepStrictEqual(
         { ...parts[0] },
-        { largo: 500, ancho: 400, cant: 2, name: 'Lateral', material: 'Roble 18mm', veta: true, cantos: [1, 0, 2, 0], grooves: [0, 0, 0, 0] }
+        { largo: 500, ancho: 400, cant: 2, name: 'Lateral', material: 'Roble 18mm', veta: true, cantos: [1, 0, 2, 0], nota: '', grooves: [0, 0, 0, 0] }
     );
     assert.strictEqual(parts[1].largo, 450.5, 'coma decimal con separador tab');
     assert.strictEqual(parts[1].material, 'Blanco Masisa', 'sin columna material usa el de la plancha');

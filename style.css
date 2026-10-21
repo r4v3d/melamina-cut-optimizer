@@ -1481,6 +1481,136 @@ body.light-theme .progress-ring-circle-bg {
     }
 }
 
+/* ===== Pestañas principales (como SketchCut) ===== */
+.app-tabs {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 50;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.35rem;
+    border-radius: 14px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    box-shadow: var(--card-shadow);
+}
+
+.app-tab {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 44px;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.app-tab:hover { color: var(--text-primary); background: rgba(148, 163, 184, 0.08); }
+
+.app-tab[aria-selected="true"] {
+    background: var(--accent-orange);
+    color: #111827;
+}
+
+.tab-badge {
+    min-width: 1.25rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--accent-teal);
+    color: #0b0f19;
+    font-size: 0.7rem;
+    font-weight: 800;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.tab-badge[hidden] { display: none; }
+
+/* Solo se ven las tarjetas de la pestaña activa */
+[data-panel]:not(.panel-active) { display: none !important; }
+
+/* Con pestañas, el contenido ocupa todo el ancho: las tarjetas se ordenan en una grilla */
+.app-main-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch; /* que las tarjetas no se estiren según su contenido más largo */
+}
+
+.workspace-area,
+.results-dashboard,
+.glass-card { min-width: 0; }
+
+.sidebar-config {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.sidebar-config .glass-card { flex: none; }
+.sidebar-config:not(:has(.panel-active)),
+.workspace-area:not(:has(.panel-active)) { display: none; }
+
+.empty-results[hidden] { display: none !important; }
+.stock-table .form-input { min-width: 70px; }
+.summary-table td:nth-child(2) { font-weight: 700; }
+.summary-table td:nth-child(3) { white-space: nowrap; }
+
+/* Nota de proceso bajo el nombre de la pieza */
+.parts-table .part-note {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+    /* En el celular las pestañas van fijas abajo, al alcance del pulgar */
+    .app-tabs {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 0;
+        border-width: 1px 0 0;
+        padding: 0.25rem 0.25rem calc(0.25rem + env(safe-area-inset-bottom));
+    }
+
+    .app-tab {
+        flex-direction: column;
+        gap: 0.1rem;
+        min-height: 54px;
+        font-size: 0.7rem;
+    }
+
+    .tab-badge { position: absolute; top: 0.2rem; right: calc(50% - 1.4rem); }
+
+    .app-container { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+    .toast-container { bottom: calc(76px + env(safe-area-inset-bottom)); }
+    .sidebar-config { grid-template-columns: 1fr; }
+}
+
+
+/* ===== Modo Editar del mapa ===== */
+#btn-edit-mode[aria-pressed="true"] {
+    background: var(--accent-orange);
+    color: #111827;
+}
+
+.canvas-scroll-wrapper.is-editing { cursor: move; outline: 2px dashed var(--accent-orange); outline-offset: -2px; }
+
 /* ===== Guía de uso y pasos numerados ===== */
 .step-badge {
     display: inline-flex;
@@ -1933,7 +2063,8 @@ body.is-pro .pro-tag { display: none; }
     cursor: pointer;
 }
 
-.sheet-thumb img {
+.sheet-thumb img,
+.sheet-thumb-canvas {
     width: 110px;
     height: auto;
     border-radius: 4px;
@@ -2516,4 +2647,134 @@ body.workshop-active { overflow: hidden; }
     .workshop-checklist {
         display: none !important;
     }
+}
+
+/* ===== Rendimiento en celulares y tablets =====
+   El desenfoque de fondo (vidrio), las sombras grandes y las animaciones infinitas obligan
+   a repintar la pantalla en cada scroll; en táctiles se reemplazan por fondos sólidos. */
+@media (hover: none), (pointer: coarse), (max-width: 900px) {
+    * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+
+    .app-header,
+    .glass-card {
+        background: #121a2c;
+        box-shadow: none;
+        transition: none;
+    }
+
+    body.light-theme .app-header,
+    body.light-theme .glass-card {
+        background: #ffffff;
+    }
+
+    .glass-card:hover { transform: none; }
+    .btn-pulse { animation: none; }
+    #cut-map-canvas { box-shadow: none; transition: none; }
+    .canvas-scroll-wrapper { touch-action: pan-y; cursor: default; }
+}
+
+/* ===== Encabezado compacto en el celular ===== */
+@media (max-width: 640px) {
+    .app-header {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+        text-align: left;
+    }
+
+    .logo-text p { display: none; }
+    .logo-text h1 { font-size: 1.15rem; }
+
+    .header-actions {
+        width: auto;
+        flex-wrap: nowrap;
+        gap: 0.35rem;
+    }
+
+    .header-actions button {
+        flex-grow: 0;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.75rem;
+    }
+
+    /* "Cargar Mueble Ejemplo" ya está en la pestaña Piezas */
+    #btn-load-preset-mueble { display: none; }
+
+    /* Solo íconos: ayuda y limpiar */
+    #btn-help,
+    #btn-clear-all { font-size: 0; gap: 0; }
+    #btn-help::before { content: '?'; font-size: 0.95rem; font-weight: 800; }
+
+    .summary-table td { white-space: normal; }
+}
+
+/* ===== Pestaña Resultado: primero el mapa (como SketchCut), luego el resumen y las métricas ===== */
+.results-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.results-dashboard > #results-stale-banner { order: 0; }
+.results-dashboard > .map-card { order: 1; }
+.results-dashboard > .summary-card { order: 2; }
+.results-dashboard > .metrics-grid { order: 3; }
+.results-dashboard > .cut-sequence-card { order: 4; }
+
+@media (max-width: 640px) {
+    /* Métricas en dos columnas compactas */
+    .metrics-grid { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    .metrics-grid .metric-card { padding: 0.8rem; }
+    .metrics-grid .metric-icon,
+    .metrics-grid .metric-chart { display: none; }
+    .metrics-grid .metric-value { font-size: 1.35rem; }
+    .metrics-grid .metric-sub-label { font-size: 0.72rem; }
+
+    /* El recuadro del mapa sigue la forma apaisada de la plancha */
+    .map-card .canvas-container { height: 82vw; min-height: 260px; }
+}
+
+/* ===== Pestaña Piezas: la lista primero; los datos del pedido después ===== */
+body[data-tab="piezas"] .workspace-area > .parts-card { order: 1; }
+body[data-tab="piezas"] .workspace-area > .unplaced-card { order: 2; }
+body[data-tab="piezas"] .workspace-area > .project-bar { order: 3; }
+
+@media (max-width: 640px) {
+    .project-fields .form-group { flex: 1 1 130px; }
+    .project-bar { padding: 0.9rem; gap: 0.6rem; }
+}
+
+/* ===== Piezas en el celular: tarjetas compactas (como las filas de SketchCut) ===== */
+@media (max-width: 640px) {
+    .parts-table tbody tr.part-row {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 0.35rem 0.5rem;
+        padding: 0.6rem 0.65rem;
+    }
+
+    .parts-table tbody tr.part-row td::before { font-size: 0.6rem; }
+
+    .parts-table tbody tr.part-row td.row-num { grid-column: 1 / -1; font-size: 0.75rem; }
+    .parts-table tbody tr.part-row td[data-label="Nombre"] { grid-column: 1 / 6; }
+    .parts-table tbody tr.part-row td[data-label="Color"] { grid-column: 6 / 7; }
+    .parts-table tbody tr.part-row td[data-label="Material"] { grid-column: 1 / -1; }
+    .parts-table tbody tr.part-row td[data-label="Largo"],
+    .parts-table tbody tr.part-row td[data-label="Ancho"],
+    .parts-table tbody tr.part-row td[data-label="Cant."] { grid-column: span 2; }
+    .parts-table tbody tr.part-row td[data-label="Veta"] { grid-column: span 1; align-items: center; }
+    .parts-table tbody tr.part-row td[data-label="Tapacantos"] { grid-column: span 5; }
+    .parts-table tbody tr.part-row td[data-label="Surcos"] { grid-column: span 4; }
+    .parts-table tbody tr.part-row td.row-actions-cell { grid-column: span 2; align-items: flex-end; justify-content: flex-end; }
+    .parts-table tbody tr.part-row td.row-actions-cell .row-actions { flex-direction: row; }
+
+    .parts-table .part-color { width: 100%; min-width: 0; height: 2.1rem; padding: 2px; }
+    .parts-table .table-input { padding: 0.35rem 0.45rem; }
+    .parts-table .canto-btn,
+    .parts-table .groove-btn { width: 34px; height: 32px; }
+    .parts-table .canto-config-grid { justify-content: flex-start; gap: 0.2rem; }
 }

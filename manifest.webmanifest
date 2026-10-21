@@ -3,9 +3,12 @@
   "short_name": "MelaminaCut",
   "description": "Optimizador de corte de planchas de melamina: planos de taller, secuencia de cortes y cotización.",
   "lang": "es",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "business"],
   "background_color": "#0b0f19",
   "theme_color": "#0b0f19",
   "icons": [

@@ -1,0 +1,8 @@
+{
+  "appId": "com.melaminacut.app",
+  "appName": "MelaminaCut",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b0f19"
+  }
+}

@@ -11,3 +11,12 @@ Copias locales para que la app funcione sin conexión en el taller.
 Texto de la licencia OFL: https://openfontlicense.org
 
 Para actualizar jsPDF: `npm pack jspdf@<versión>` y copiar `package/dist/jspdf.umd.min.js`.
+| `capacitor/core.js` | paquete npm `@capacitor/core` (`dist/index.js`) | 8.5.3 | MIT |
+
+`capacitor/core.js` solo se carga dentro de la app Android (ver `js/app/native.js`).
+Al actualizar Capacitor: `cp node_modules/@capacitor/core/dist/index.js vendor/capacitor/core.js`.
+
+| `sheetjs/xlsx.full.min.js` | SheetJS CE, tarball oficial `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` (`package/dist/`) | 0.20.3 | Apache 2.0 (`sheetjs/LICENSE`) |
+
+SheetJS se descarga del CDN oficial y no de npm: la versión de npm (0.18.5) está desactualizada y tiene vulnerabilidades conocidas.
+Se carga solo al importar un Excel (ver `js/app/importer.js`).

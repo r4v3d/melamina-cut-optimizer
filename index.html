@@ -53,9 +53,9 @@
         <div class="glass-card welcome-card" id="welcome-card" hidden>
             <h2 class="card-title">Arma tu plan de corte en 3 pasos</h2>
             <ol class="welcome-steps">
-                <li><span class="step-badge">1</span><div><strong>Elige la plancha.</strong> Tamaño, espesor y color, en la tarjeta "Plancha de Melamina".</div></li>
-                <li><span class="step-badge">2</span><div><strong>Escribe tus piezas.</strong> Nombre, largo, ancho y cantidad. Marca los cantos con un clic. O usa "Mueble por medidas".</div></li>
-                <li><span class="step-badge">3</span><div><strong>Revisa el mapa y corta.</strong> Descarga el PDF para el taller, sigue los pasos en "Modo Taller" y envía la cotización a tu cliente.</div></li>
+                <li><span class="step-badge">1</span><div><strong>Piezas.</strong> Escribe nombre, largo, ancho y cantidad. Marca los cantos con un clic, o usa "Mueble por medidas".</div></li>
+                <li><span class="step-badge">2</span><div><strong>Planchas.</strong> Elige la medida de la plancha y agrega los retazos que tengas.</div></li>
+                <li><span class="step-badge">3</span><div><strong>Resultado y Cortar.</strong> Revisa el mapa, descarga el PDF para el taller y sigue los pasos en "Modo Taller". En Costos envías la cotización.</div></li>
             </ol>
             <div class="welcome-actions">
                 <button type="button" class="btn btn-primary btn-sm" id="btn-welcome-example">Ver un ejemplo</button>
@@ -63,12 +63,36 @@
             </div>
         </div>
 
+        <!-- Pestañas principales (como SketchCut): en el celular van abajo -->
+        <nav class="app-tabs" role="tablist" aria-label="Secciones de la app">
+            <button type="button" class="app-tab" role="tab" data-tab="piezas" aria-controls="panel-piezas">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                <span>Piezas</span>
+            </button>
+            <button type="button" class="app-tab" role="tab" data-tab="planchas" aria-controls="panel-planchas">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 10h18"/></svg>
+                <span>Planchas</span>
+            </button>
+            <button type="button" class="app-tab" role="tab" data-tab="resultado" aria-controls="panel-resultado">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M9 12h12"/></svg>
+                <span>Resultado</span>
+                <span class="tab-badge" id="tab-badge-resultado" hidden></span>
+            </button>
+            <button type="button" class="app-tab" role="tab" data-tab="corte" aria-controls="panel-corte">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>
+                <span>Cortar</span>
+            </button>
+            <button type="button" class="app-tab" role="tab" data-tab="costos" aria-controls="panel-costos">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <span>Costos</span>
+            </button>
+        </nav>
+
         <main class="app-main-layout">
             <!-- Sidebar: Configuración -->
             <aside class="sidebar-config">
-                <div class="glass-card">
+                <div class="glass-card" data-panel="planchas" id="panel-planchas">
                     <h2 class="card-title">
-                        <span class="step-badge" aria-hidden="true">1</span>
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                         Plancha de Melamina
                     </h2>
@@ -108,8 +132,31 @@
                         </div>
                     </div>
                 </div>
+                <div class="glass-card stock-card" data-panel="planchas">
+                    <h2 class="card-title">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="16" height="12" rx="1"></rect><path d="M6 2h16v12"></path></svg>
+                        Planchas del proyecto
+                    </h2>
+                    <p class="modal-help">Agrega las planchas y retazos que tienes para este trabajo, con su cantidad. Se usan primero, en el mismo cálculo. Si la lista está vacía, se usa la plancha de arriba sin límite.</p>
+                    <div class="table-responsive">
+                        <table class="modal-table stock-table">
+                            <thead><tr><th>Material</th><th>Tipo</th><th>Largo</th><th>Ancho</th><th>Cant.</th><th></th></tr></thead>
+                            <tbody id="stock-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="modal-inline-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-stock-add">+ Agregar plancha</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-stock-add-remnant">+ Agregar retazo</button>
+                    </div>
+                    <div class="form-group inline-checkbox">
+                        <input type="checkbox" id="check-stock-allow-new" checked>
+                        <label for="check-stock-allow-new">Si no alcanzan, usar planchas nuevas de la medida estándar</label>
+                    </div>
+                    <small class="field-hint field-hint-check">Cantidad vacía = ilimitada. Los retazos no se cobran en la cotización.</small>
+                </div>
 
-                <div class="glass-card">
+
+                <div class="glass-card" data-panel="planchas">
                     <h2 class="card-title">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
                         Parámetros de Taller
@@ -207,7 +254,7 @@
                     </details>
                 </div>
 
-                <div class="glass-card" data-collapsed-default>
+                <div class="glass-card" data-panel="costos" id="panel-costos">
                     <h2 class="card-title">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="4" x2="12" y2="20"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
                         Precios y Cotización
@@ -264,6 +311,10 @@
                             <input type="number" id="input-costo-ranura" class="form-input" value="3.0" min="0" step="0.1">
                         </div>
                     </div>
+                    <div class="modal-inline-actions costos-actions">
+                        <button type="button" class="btn btn-primary btn-sm" data-proxy-click="btn-quote-pdf">Cotización PDF</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-proxy-click="btn-share-quote">Compartir por WhatsApp</button>
+                    </div>
                     <!-- Cotización Comercial Avanzada -->
                     <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
                         <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-orange); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Cargos y Margen Comercial</h3>
@@ -303,7 +354,7 @@
                     </div>
                 </div>
 
-                <div class="glass-card info-box">
+                <div class="glass-card info-box" data-panel="planchas">
                     <h3>💡 Consejos de Carpintero:</h3>
                     <ul>
                         <li>El <strong>refilado</strong> de 10mm limpia las astillas y golpes del transporte en la plancha.</li>
@@ -316,7 +367,7 @@
             <!-- Main Content Area -->
             <section class="workspace-area">
                 <!-- Proyecto actual y herramientas del taller -->
-                <div class="glass-card project-bar">
+                <div class="glass-card project-bar" data-panel="piezas costos">
                     <div class="project-fields">
                         <div class="form-group">
                             <label for="input-project-name">Proyecto</label>
@@ -330,6 +381,14 @@
                             <label for="input-client-phone">Teléfono / WhatsApp</label>
                             <input type="tel" id="input-client-phone" class="form-input" placeholder="Ej. 51987654321">
                         </div>
+                        <div class="form-group">
+                            <label for="input-order-date">Fecha de pedido</label>
+                            <input type="date" id="input-order-date" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="input-delivery-date">Fecha de entrega</label>
+                            <input type="date" id="input-delivery-date" class="form-input">
+                        </div>
                     </div>
                     <div class="project-actions">
                         <button id="btn-projects" class="btn btn-secondary btn-sm">Proyectos</button>
@@ -340,10 +399,9 @@
                 </div>
 
                 <!-- Part List Card -->
-                <div class="glass-card parts-card">
+                <div class="glass-card parts-card" data-panel="piezas" id="panel-piezas">
                     <div class="parts-header">
                         <h2 class="card-title">
-                            <span class="step-badge" aria-hidden="true">2</span>
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                             Piezas a cortar
                         </h2>
@@ -368,8 +426,8 @@
                         <div style="display: flex; gap: 0.5rem;">
                             <button id="btn-import-csv-confirm" class="btn btn-primary btn-sm">Procesar e Importar</button>
                             <label class="btn btn-secondary btn-sm import-file-label">
-                                Subir archivo CSV/TXT
-                                <input type="file" id="import-file" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden>
+                                Subir Excel / CSV
+                                <input type="file" id="import-file" accept=".xlsx,.xls,.ods,.csv,.txt,.tsv,text/csv,text/plain" hidden>
                             </label>
                             <button id="btn-import-csv-cancel" class="btn btn-secondary btn-sm">Cancelar</button>
                         </div>
@@ -428,7 +486,7 @@
                 </div>
 
                 <!-- Unplaced Parts Card (Piezas no colocadas) -->
-                <div class="glass-card unplaced-card" id="unplaced-container" style="display: none;">
+                <div class="glass-card unplaced-card" id="unplaced-container" style="display: none;" data-panel="resultado piezas">
                     <h2 class="card-title" style="color: var(--accent-red);">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                         Piezas Sin Colocar / Excedentes (<span id="unplaced-count">0</span>)
@@ -439,12 +497,18 @@
                     </div>
                 </div>
 
+                <div class="glass-card empty-results" id="empty-results" data-panel="resultado corte">
+                    <h2 class="card-title">Todavía no hay resultado</h2>
+                    <p class="modal-help">Escribe tus piezas en la pestaña <strong>Piezas</strong> y el plan de corte aparecerá aquí.</p>
+                    <button type="button" class="btn btn-primary btn-sm" data-goto-tab="piezas">Ir a Piezas</button>
+                </div>
+
                 <!-- Optimization Results Dashboard -->
                 <div class="results-dashboard" id="results-section" style="display: none;">
-                    <div id="results-stale-banner" class="sequence-stale-banner" hidden>Cambiaste piezas o parámetros de plancha/taller. Pulsa «Optimizar Cortes» para actualizar el mapa y la cotización.</div>
+                    <div id="results-stale-banner" class="sequence-stale-banner" hidden data-panel="resultado corte costos">Cambiaste piezas o parámetros de plancha/taller. Pulsa «Optimizar Cortes» para actualizar el mapa y la cotización.</div>
                     <!-- Key Metrics -->
-                    <div class="metrics-grid">
-                        <div class="glass-card metric-card accent-teal">
+                    <div class="metrics-grid" data-panel="resultado costos">
+                        <div class="glass-card metric-card accent-teal" data-panel="resultado">
                             <div class="metric-info">
                                 <span class="metric-label">Eficiencia total</span>
                                 <span class="metric-value" id="val-eficiencia">0.0%</span>
@@ -459,7 +523,7 @@
                             </div>
                         </div>
 
-                        <div class="glass-card metric-card accent-orange">
+                        <div class="glass-card metric-card accent-orange" data-panel="resultado">
                             <div class="metric-info">
                                 <span class="metric-label">Planchas requeridas</span>
                                 <span class="metric-value" id="val-planchas">0</span>
@@ -470,7 +534,7 @@
                             </div>
                         </div>
 
-                        <div class="glass-card metric-card">
+                        <div class="glass-card metric-card" data-panel="resultado costos">
                             <div class="metric-info">
                                 <span class="metric-label">Presupuesto Estimado</span>
                                 <span class="metric-value" id="val-costo-total">$0.00</span>
@@ -484,7 +548,7 @@
                             </div>
                         </div>
 
-                        <div class="glass-card metric-card">
+                        <div class="glass-card metric-card" data-panel="resultado">
                             <div class="metric-info">
                                 <span class="metric-label">Metros de tapacanto</span>
                                 <span class="metric-sub-label">Delgado: <strong id="val-canto-delgado">0m</strong></span>
@@ -496,7 +560,7 @@
                             </div>
                         </div>
 
-                        <div class="glass-card metric-card">
+                        <div class="glass-card metric-card" data-panel="resultado">
                             <div class="metric-info">
                                 <span class="metric-label">Cortes totales</span>
                                 <span class="metric-value" id="val-metros-corte">0m</span>
@@ -508,11 +572,22 @@
                         </div>
                     </div>
 
+                    <!-- Resumen en una sola tabla (como SketchCut) -->
+                    <div class="glass-card summary-card" data-panel="resultado">
+                        <h3 class="card-title" style="margin-bottom: 0.75rem;">Resumen</h3>
+                        <div class="table-responsive">
+                            <table class="modal-table summary-table">
+                                <thead><tr><th>Concepto</th><th>Cantidad</th><th>Área / Largo</th></tr></thead>
+                                <tbody id="summary-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Cut Map Visualization -->
-                    <div class="glass-card map-card">
+                    <div class="glass-card map-card" data-panel="resultado" id="panel-resultado">
                         <div class="map-header">
                             <div class="map-title-area" style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; width: 100%;">
-                                <h3 class="card-title" style="margin-bottom: 0;"><span class="step-badge" aria-hidden="true">3</span> Mapa de corte</h3>
+                                <h3 class="card-title" style="margin-bottom: 0;"> Mapa de corte</h3>
                                 <div class="material-group-selector" style="display: inline-flex; align-items: center; gap: 0.5rem;">
                                     <label for="select-material-group" style="font-size: 0.8rem; font-weight: bold; color: var(--text-secondary);">Material:</label>
                                     <select id="select-material-group" class="form-select-sm" style="font-weight: 600;">
@@ -551,6 +626,9 @@
                                 <button id="btn-zoom-in" title="Acercar (también Ctrl + rueda del mouse)" aria-label="Acercar">+</button>
                                 <button id="btn-zoom-reset" title="Restaurar Vista" aria-label="Ajustar a la pantalla">100%</button>
                                 <button id="btn-zoom-out" title="Alejar" aria-label="Alejar">-</button>
+                                <button id="btn-edit-mode" title="Modo Editar: arrastrar piezas" aria-label="Modo Editar: arrastrar piezas" aria-pressed="false" style="display: flex; align-items: center; justify-content: center;">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+                                </button>
                                 <button id="btn-fullscreen-toggle" title="Pantalla Completa" aria-label="Pantalla completa" style="display: flex; align-items: center; justify-content: center;">
                                     <svg class="icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
@@ -587,10 +665,10 @@
                     </div>
 
                      <!-- Cut sequence list (guillotine cuts) -->
-                     <div class="glass-card cut-sequence-card">
+                     <div class="glass-card cut-sequence-card" data-panel="corte" id="panel-corte">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
                             <div>
-                                <h3 class="card-title" style="margin-bottom: 0;"><span class="step-badge" aria-hidden="true">4</span> Cortar en el taller</h3>
+                                <h3 class="card-title" style="margin-bottom: 0;"> Cortar en el taller</h3>
                                 <p class="card-subtitle" style="margin-bottom: 0; margin-top: 0.25rem;">Realiza los cortes en el orden indicado para separar las piezas siguiendo la regla de guillotina.</p>
                             </div>
                             <div class="sequence-wizard-controls" style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--bg-input-muted); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-color);">

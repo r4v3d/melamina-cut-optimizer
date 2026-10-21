@@ -15,7 +15,7 @@ function csvCell(value) {
  */
 export function cutListCsv(results) {
     const header = ['Material', 'Plancha', '#', 'Pieza', 'Corte largo (mm)', 'Corte ancho (mm)',
-        'Largo nominal', 'Ancho nominal', 'Girada', 'Cantos', 'Surcos', 'X (mm)', 'Y (mm)'];
+        'Largo nominal', 'Ancho nominal', 'Girada', 'Cantos', 'Surcos', 'X (mm)', 'Y (mm)', 'Nota'];
     const rows = [header];
     for (const matName in results.groups) {
         const group = results.groups[matName];
@@ -28,7 +28,7 @@ export function cutListCsv(results) {
                     matName, sheetLabel, p.originalIndex !== undefined ? p.originalIndex + 1 : '', p.name,
                     dec(p.largo), dec(p.ancho),
                     p.largoNominal, p.anchoNominal, p.rotated ? 'Sí' : 'No',
-                    cantos || '-', surcos || '-', dec(p.x), dec(p.y)
+                    cantos || '-', surcos || '-', dec(p.x), dec(p.y), p.nota || ''
                 ]);
             }
         });
