@@ -4,11 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MelaminaCut - Optimizador de Corte de Planchas</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.1">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <meta name="description" content="Optimizador de corte de planchas de melamina: planos de taller, secuencia de cortes y cotización.">
+    <meta name="theme-color" content="#0b0f19">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <!-- Dependencias locales: la app funciona sin conexión (ver vendor/README.md) -->
+    <link rel="stylesheet" href="vendor/fonts/fonts.css">
+    <link rel="stylesheet" href="style.css?v=3.0">
+    <script src="vendor/jspdf/jspdf.umd.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -28,7 +32,7 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button id="btn-theme-toggle" class="btn btn-secondary" title="Cambiar de Tema" style="padding: 0.625rem 0.75rem;">
+                <button id="btn-theme-toggle" class="btn btn-secondary" title="Cambiar de Tema" aria-label="Cambiar tema claro/oscuro" style="padding: 0.625rem 0.75rem;">
                     <svg id="theme-toggle-dark-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     <svg id="theme-toggle-light-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                 </button>
@@ -124,11 +128,11 @@
                         <label>Grosor de Tapacantos (mm)</label>
                         <div class="form-row" style="margin-bottom:0;">
                             <div class="col-6">
-                                <label for="input-canto-delgado-val" style="font-size:0.7rem; color:var(--text-muted);">Delgado (Tipo 2)</label>
+                                <label for="input-canto-delgado-val" style="font-size:0.7rem; color:var(--text-muted);">Delgado (D)</label>
                                 <input type="number" id="input-canto-delgado-val" class="form-input" value="0.4" min="0" max="5" step="0.1">
                             </div>
                             <div class="col-6">
-                                <label for="input-canto-grueso-val" style="font-size:0.7rem; color:var(--text-muted);">Grueso (Tipo 1)</label>
+                                <label for="input-canto-grueso-val" style="font-size:0.7rem; color:var(--text-muted);">Grueso (G)</label>
                                 <input type="number" id="input-canto-grueso-val" class="form-input" value="2.0" min="0" max="10" step="0.1">
                             </div>
                         </div>
@@ -162,6 +166,21 @@
                         <label for="check-tiene-veta">Considerar veta en la plancha</label>
                     </div>
 
+                    <div class="form-group inline-checkbox">
+                        <input type="checkbox" id="check-usar-retazos">
+                        <label for="check-usar-retazos">Usar retazos del inventario primero</label>
+                    </div>
+
+                    <div class="form-group inline-checkbox">
+                        <input type="checkbox" id="check-busqueda-extra" checked>
+                        <label for="check-busqueda-extra" title="Prueba combinaciones aleatorias adicionales durante ~0,4 s para ahorrar material">Búsqueda extra (mejor aprovechamiento)</label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="input-canto-margen">Despunte de tapacanto (mm por lado)</label>
+                        <input type="number" id="input-canto-margen" class="form-input" value="0" min="0" max="200" title="Sobrante que se agrega a cada lado enchapado al calcular metros de canto">
+                    </div>
+
                     <div class="workshop-checklist" id="workshop-checklist">
                         <span id="chk-veta-state">Veta global: OFF</span>
                         <span id="chk-canto-state">Descontar canto: ON</span>
@@ -179,6 +198,11 @@
                             <option value="PEN" selected>Soles Peruanos (S/.)</option>
                             <option value="USD">Dólares ($USD)</option>
                             <option value="COP">Pesos Colombianos ($COP)</option>
+                            <option value="CLP">Pesos Chilenos ($CLP)</option>
+                            <option value="MXN">Pesos Mexicanos ($MXN)</option>
+                            <option value="ARS">Pesos Argentinos ($ARS)</option>
+                            <option value="BOB">Bolivianos (Bs.)</option>
+                            <option value="EUR">Euros (€)</option>
                         </select>
                     </div>
                     <div class="form-row">
@@ -246,7 +270,14 @@
                             </div>
                             <div class="form-group col-6">
                                 <label for="input-impuesto">Impuesto (%)</label>
-                                <input type="number" id="input-impuesto" class="form-input" value="0" min="0" max="100">
+                                <input type="number" id="input-impuesto" class="form-input" value="0" min="0" max="100" list="impuesto-sugeridos" title="Sugerencias: IGV Perú 18%, IVA Colombia 19%, Chile 19%, México 16%, Argentina 21%, Bolivia 13%">
+                                <datalist id="impuesto-sugeridos">
+                                    <option value="18" label="IGV Perú"></option>
+                                    <option value="19" label="IVA Colombia / Chile"></option>
+                                    <option value="16" label="IVA México"></option>
+                                    <option value="21" label="IVA Argentina / España"></option>
+                                    <option value="13" label="IVA Bolivia"></option>
+                                </datalist>
                             </div>
                         </div>
                     </div>
@@ -264,6 +295,30 @@
 
             <!-- Main Content Area -->
             <section class="workspace-area">
+                <!-- Proyecto actual y herramientas del taller -->
+                <div class="glass-card project-bar">
+                    <div class="project-fields">
+                        <div class="form-group">
+                            <label for="input-project-name">Proyecto</label>
+                            <input type="text" id="input-project-name" class="form-input" placeholder="Ej. Cocina Sra. Pérez">
+                        </div>
+                        <div class="form-group">
+                            <label for="input-client-name">Cliente</label>
+                            <input type="text" id="input-client-name" class="form-input" placeholder="Nombre del cliente">
+                        </div>
+                        <div class="form-group">
+                            <label for="input-client-phone">Teléfono / WhatsApp</label>
+                            <input type="tel" id="input-client-phone" class="form-input" placeholder="Ej. 51987654321">
+                        </div>
+                    </div>
+                    <div class="project-actions">
+                        <button id="btn-projects" class="btn btn-secondary btn-sm">Proyectos</button>
+                        <button id="btn-catalog" class="btn btn-secondary btn-sm">Catálogo de materiales</button>
+                        <button id="btn-retazos" class="btn btn-secondary btn-sm">Retazos</button>
+                        <button id="btn-taller-profile" class="btn btn-secondary btn-sm">Mi taller</button>
+                    </div>
+                </div>
+
                 <!-- Part List Card -->
                 <div class="glass-card parts-card">
                     <div class="parts-header">
@@ -276,6 +331,7 @@
                                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                 Importar Excel/CSV
                             </button>
+                            <button id="btn-furniture-builder" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 6px;">Mueble por medidas</button>
                             <label for="select-mueble-preset">Cargar Mueble:</label>
                             <select id="select-mueble-preset" class="form-select-sm">
                                 <option value="" disabled selected>Seleccione...</option>
@@ -286,10 +342,14 @@
 
                     <!-- Importador de datos por lote -->
                     <div class="import-container" style="margin-bottom: 1rem; border: 1px dashed var(--border-color); border-radius: 8px; padding: 1rem; display: none;" id="import-csv-container">
-                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase;">Pegar datos de Excel o CSV (Formato: Largo [Tab/Coma] Ancho [Tab/Coma] Cant [Tab/Coma] Nombre)</label>
-                        <textarea id="import-csv-textarea" class="form-input" style="height: 100px; font-family: monospace; font-size: 0.8rem; margin-bottom: 0.75rem; background-color: var(--bg-input-muted);" placeholder="Ejemplo:&#10;500&#9;400&#9;2&#9;Lateral Izquierdo&#10;450&#9;400&#9;1&#9;Techo"></textarea>
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase;">Pegar datos de Excel o CSV — columnas: Largo, Ancho, Cant, Nombre, Material, Veta (si/no), Cantos (L1L2A1A2, ej. D0G0). Solo Largo y Ancho son obligatorios.</label>
+                        <textarea id="import-csv-textarea" class="form-input" style="height: 100px; font-family: monospace; font-size: 0.8rem; margin-bottom: 0.75rem; background-color: var(--bg-input-muted);" placeholder="Ejemplo:&#10;500&#9;400&#9;2&#9;Lateral Izquierdo&#9;Roble 18mm&#9;si&#9;D0G0&#10;450&#9;400&#9;1&#9;Techo"></textarea>
                         <div style="display: flex; gap: 0.5rem;">
                             <button id="btn-import-csv-confirm" class="btn btn-primary btn-sm">Procesar e Importar</button>
+                            <label class="btn btn-secondary btn-sm import-file-label">
+                                Subir archivo CSV/TXT
+                                <input type="file" id="import-file" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden>
+                            </label>
                             <button id="btn-import-csv-cancel" class="btn btn-secondary btn-sm">Cancelar</button>
                         </div>
                     </div>
@@ -314,6 +374,13 @@
                             <tbody id="parts-tbody">
                                 <!-- Filas de piezas insertadas por JS -->
                             </tbody>
+                            <tfoot>
+                                <tr class="parts-totals">
+                                    <td colspan="6" id="parts-totals-label">Totales</td>
+                                    <td id="parts-totals-cant">0</td>
+                                    <td colspan="4" id="parts-totals-detail"></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
 
@@ -343,6 +410,7 @@
 
                 <!-- Optimization Results Dashboard -->
                 <div class="results-dashboard" id="results-section" style="display: none;">
+                    <div id="results-stale-banner" class="sequence-stale-banner" hidden>Cambiaste piezas o parámetros de plancha/taller. Pulsa «Optimizar Cortes» para actualizar el mapa y la cotización.</div>
                     <!-- Key Metrics -->
                     <div class="metrics-grid">
                         <div class="glass-card metric-card accent-teal">
@@ -354,7 +422,7 @@
                             </div>
                             <div class="metric-chart">
                                 <svg class="progress-ring" width="60" height="60">
-                                    <circle class="progress-ring-circle-bg" stroke="#1e293b" stroke-width="6" fill="transparent" r="24" cx="30" cy="30" />
+                                    <circle class="progress-ring-circle-bg" stroke-width="6" fill="transparent" r="24" cx="30" cy="30" />
                                     <circle class="progress-ring-circle" id="circle-eficiencia" stroke="#06b6d4" stroke-width="6" fill="transparent" r="24" cx="30" cy="30" stroke-dasharray="150.79" stroke-dashoffset="150.79" />
                                 </svg>
                             </div>
@@ -376,7 +444,9 @@
                                 <span class="metric-label">Presupuesto Estimado</span>
                                 <span class="metric-value" id="val-costo-total">$0.00</span>
                                 <span class="metric-sub-label">Planchas: <span id="val-sub-planchas">$0.00</span></span>
-                                <span class="metric-sub-label">Cortes/Cantos/Surc: <span id="val-sub-servicios">$0.00</span></span>
+                                <span class="metric-sub-label">Cortes/Cantos/Surcos: <span id="val-sub-servicios">$0.00</span></span>
+                                <span class="metric-sub-label">Herrajes + M. obra: <span id="val-sub-extras">$0.00</span></span>
+                                <span class="metric-sub-label">Margen + impuesto: <span id="val-sub-margen">$0.00</span></span>
                             </div>
                             <div class="metric-icon">
                                 <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="4" x2="12" y2="20"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
@@ -419,9 +489,9 @@
                                     </select>
                                 </div>
                                 <div class="sheet-navigation">
-                                    <button class="btn-nav" id="btn-prev-sheet" disabled>&lt;</button>
+                                    <button class="btn-nav" id="btn-prev-sheet" disabled aria-label="Plancha anterior">&lt;</button>
                                     <span id="sheet-nav-label">Plancha 1 de 1</span>
-                                    <button class="btn-nav" id="btn-next-sheet" disabled>&gt;</button>
+                                    <button class="btn-nav" id="btn-next-sheet" disabled aria-label="Plancha siguiente">&gt;</button>
                                 </div>
                             </div>
                             <div class="map-actions" style="margin-top: 0.5rem;">
@@ -437,16 +507,21 @@
                                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                                     Imprimir Reporte
                                 </button>
+                                <button id="btn-quote-pdf" class="btn btn-primary btn-sm" title="Cotización para el cliente con los datos de tu taller">Cotización PDF</button>
+                                <button id="btn-share-quote" class="btn btn-secondary btn-sm" title="Enviar la cotización por WhatsApp u otra app">Compartir</button>
+                                <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Lista de corte para Excel">Lista CSV</button>
+                                <button id="btn-export-dxf" class="btn btn-secondary btn-sm" title="Plano de la plancha visible para CAD / CNC">Plano DXF</button>
+                                <button id="btn-register-inventory" class="btn btn-secondary btn-sm" title="Descuenta los retazos usados y guarda los sobrantes útiles de este corte">Registrar en inventario</button>
                             </div>
                         </div>
 
                         <!-- Canvas Container -->
                         <div class="canvas-container">
                             <div class="canvas-zoom-controls">
-                                <button id="btn-zoom-in" title="Acercar">+</button>
-                                <button id="btn-zoom-reset" title="Restaurar Vista">100%</button>
-                                <button id="btn-zoom-out" title="Alejar">-</button>
-                                <button id="btn-fullscreen-toggle" title="Pantalla Completa" style="display: flex; align-items: center; justify-content: center;">
+                                <button id="btn-zoom-in" title="Acercar (también Ctrl + rueda del mouse)" aria-label="Acercar">+</button>
+                                <button id="btn-zoom-reset" title="Restaurar Vista" aria-label="Ajustar a la pantalla">100%</button>
+                                <button id="btn-zoom-out" title="Alejar" aria-label="Alejar">-</button>
+                                <button id="btn-fullscreen-toggle" title="Pantalla Completa" aria-label="Pantalla completa" style="display: flex; align-items: center; justify-content: center;">
                                     <svg class="icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
                                     </svg>
@@ -456,7 +531,7 @@
                                 </button>
                             </div>
                             <div class="canvas-scroll-wrapper">
-                                <canvas id="cut-map-canvas"></canvas>
+                                <canvas id="cut-map-canvas" role="img" aria-label="Mapa de corte de la plancha"></canvas>
                                 <img id="print-map-image" />
                                 <div id="cut-wizard-overlay" class="cut-wizard-overlay" hidden>
                                     <p id="cut-wizard-overlay-text" class="cut-wizard-overlay-text"></p>
@@ -468,6 +543,8 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div id="sheet-thumbnails" class="sheet-thumbnails" role="list" aria-label="Todas las planchas del material"></div>
 
                         <div class="legend-area">
                             <div class="legend-item"><span class="legend-color color-part"></span> Pieza</div>
@@ -487,14 +564,15 @@
                                 <p class="card-subtitle" style="margin-bottom: 0; margin-top: 0.25rem;">Realiza los cortes en el orden indicado para separar las piezas siguiendo la regla de guillotina.</p>
                             </div>
                             <div class="sequence-wizard-controls" style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--bg-input-muted); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <button id="btn-seq-prev" class="btn-nav" disabled title="Paso anterior">&lt;</button>
+                                <button id="btn-seq-prev" class="btn-nav" disabled title="Paso anterior" aria-label="Paso anterior">&lt;</button>
                                 <span id="lbl-seq-step" style="font-size: 0.8rem; font-weight: bold; min-width: 90px; text-align: center; user-select: none;">Paso: Off</span>
-                                <button id="btn-seq-next" class="btn-nav" disabled title="Siguiente paso">&gt;</button>
+                                <button id="btn-seq-next" class="btn-nav" disabled title="Siguiente paso" aria-label="Siguiente paso">&gt;</button>
                                 <button id="btn-seq-done" class="btn btn-primary btn-sm" style="font-size: 0.75rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 4px;" title="Marcar corte como hecho">Hecho</button>
                                 <button id="btn-seq-reset" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 4px;" title="Reiniciar visualización">Apagar</button>
+                                <button id="btn-workshop-mode" class="btn btn-primary btn-sm" style="font-size: 0.75rem; font-weight: bold; padding: 0.2rem 0.6rem; border-radius: 4px;" title="Pantalla completa con un paso por pantalla, para usar junto a la sierra">Modo Taller</button>
                             </div>
                         </div>
-                        <div id="sequence-stale-banner" class="sequence-stale-banner" hidden>Reoptimizar para actualizar cortes. La secuencia actual no coincide con el mapa.</div>
+                        <div id="sequence-stale-banner" class="sequence-stale-banner" hidden>Esta distribución manual no se puede cortar solo con cortes de lado a lado (guillotina). Deshaga el cambio o reoptimice.</div>
                         <ol class="sequence-list" id="sequence-list-el">
                              <!-- Populated dynamically -->
                         </ol>
@@ -513,9 +591,7 @@
     </div>
 
     <!-- Script loading -->
-    <script src="js/presets.js?v=2.1"></script>
-    <script src="js/optimizer.js?v=2.1"></script>
-    <script src="js/canvas.js?v=2.1"></script>
-    <script src="js/ui.js?v=2.1"></script>
+    <!-- La app usa módulos ES: se debe servir por HTTP (npm run dev), no abrir como archivo -->
+    <script type="module" src="js/app/main.js?v=3.0"></script>
 </body>
 </html>
