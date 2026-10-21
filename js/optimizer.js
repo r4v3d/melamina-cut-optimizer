@@ -5,6 +5,14 @@ const OPT_EPS = 0.2; // mm — tolerancia de sierra / error de punto flotante
 const MIN_RETAZO_AREA_MM2 = 100000; // 0.1 m² — sobrante que vale la pena guardar
 const MIN_RETAZO_LADO_MM = 50;
 
+// Texto del material que queda al lado de un corte: tiras angostas son desperdicio, no sobrante
+function leftoverLabel(w, h) {
+    const minSide = Math.min(w, h);
+    if (!(minSide > OPT_EPS)) return 'sin sobrante';
+    if (minSide < MIN_RETAZO_LADO_MM) return `desperdicio de ${Math.round(minSide)} mm`;
+    return `sobrante ${Math.round(w)} × ${Math.round(h)} mm`;
+}
+
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 // Generador pseudoaleatorio con semilla (resultados reproducibles)
@@ -286,8 +294,9 @@ class CutOptimizer {
         global.cantoGrueso = CutOptimizer.round1(global.cantoGrueso);
         global.totalGroovesLength = CutOptimizer.round1(global.totalGroovesLength);
         global.leftoverAreaM2 = Math.round((totalLeftover / 1e6) * 1000) / 1000;
+        // Merma = lo que se pierde (aserrín y tiras angostas); los sobrantes útiles no cuentan
         global.wastePercent = totalUsableArea > 0
-            ? Math.round((1 - totalPlacedArea / totalUsableArea) * 1000) / 10
+            ? Math.max(0, Math.round((1 - (totalPlacedArea + totalLeftover) / totalUsableArea) * 1000) / 10)
             : 0;
         global.winningStrategy = winningNames[0] || '';
         return global;
@@ -810,9 +819,7 @@ class CutOptimizer {
                         keep: isSheet
                             ? `tira ${Math.round(freeRect.w)} × ${Math.round(pH)} mm`
                             : keepLabel,
-                        leftover: leftoverH > OPT_EPS
-                            ? `sobrante ${Math.round(freeRect.w)} × ${Math.round(Math.max(leftoverH, 0))} mm`
-                            : 'sin sobrante útil'
+                        leftover: leftoverLabel(freeRect.w, leftoverH)
                     },
                     partName: part.name,
                     partId: part.id,
@@ -838,9 +845,7 @@ class CutOptimizer {
                     leftoverStripId: null,
                     produces: {
                         keep: keepLabel,
-                        leftover: leftoverW > OPT_EPS
-                            ? `sobrante ${Math.round(leftoverW)} × ${Math.round(pH)} mm`
-                            : 'sin sobrante útil'
+                        leftover: leftoverLabel(leftoverW, pH)
                     },
                     partName: part.name,
                     partId: part.id,
@@ -890,9 +895,7 @@ class CutOptimizer {
                         keep: isSheet
                             ? `tira ${Math.round(pW)} × ${Math.round(freeRect.h)} mm`
                             : keepLabel,
-                        leftover: leftoverW > OPT_EPS
-                            ? `sobrante ${Math.round(Math.max(leftoverW, 0))} × ${Math.round(freeRect.h)} mm`
-                            : 'sin sobrante útil'
+                        leftover: leftoverLabel(leftoverW, freeRect.h)
                     },
                     partName: part.name,
                     partId: part.id,
@@ -918,9 +921,7 @@ class CutOptimizer {
                     leftoverStripId: null,
                     produces: {
                         keep: keepLabel,
-                        leftover: leftoverH > OPT_EPS
-                            ? `sobrante ${Math.round(pW)} × ${Math.round(leftoverH)} mm`
-                            : 'sin sobrante útil'
+                        leftover: leftoverLabel(pW, leftoverH)
                     },
                     partName: part.name,
                     partId: part.id,
@@ -963,9 +964,9 @@ class CutOptimizer {
                 ? Math.round(sheet.usableH || sheet.h)
                 : Math.round(sheet.usableW || sheet.w);
             const sideName = cut.axis === 'H' ? 'ancho' : 'largo';
-            return `Raja: tope a ${fence} mm en el ${sideName} (${sideMm} mm). Sale ${keep}.${leftoverTxt}`;
+            return `Tope a ${fence} mm en el ${sideName} (${sideMm} mm). Sale ${keep}.${leftoverTxt}`;
         }
-        return `Sobre la tira: traza, tope a ${fence} mm. Sale ${keep}.${leftoverTxt}`;
+        return `Tope a ${fence} mm sobre la tira. Sale ${keep}.${leftoverTxt}`;
     }
 
     finalizeSheetCuts(sheet) {
@@ -1046,19 +1047,19 @@ class CutOptimizer {
         return [
             {
                 ...base, axis: 'H', x1: 0, y1: r, x2: W, y2: r, fenceMm: null, fromEdge: 'ancho',
-                desc: `Refilado: recorta ~${r} mm de un borde largo para limpiar el canto de fábrica.`
+                desc: `Recorta ~${r} mm de un borde largo para limpiar el canto de fábrica.`
             },
             {
                 ...base, axis: 'V', x1: r, y1: r, x2: r, y2: H, fenceMm: null, fromEdge: 'largo',
-                desc: `Refilado: recorta ~${r} mm de un borde corto, a escuadra con el borde ya limpio.`
+                desc: `Recorta ~${r} mm de un borde corto, a escuadra con el borde ya limpio.`
             },
             {
                 ...base, axis: 'H', x1: r, y1: H - r, x2: W, y2: H - r, fenceMm: uH, fromEdge: 'ancho',
-                desc: `Refilado: tope a ${uH} mm desde el borde largo limpio. Queda el ancho útil.`
+                desc: `Tope a ${uH} mm desde el borde largo limpio. Queda el ancho útil.`
             },
             {
                 ...base, axis: 'V', x1: W - r, y1: r, x2: W - r, y2: H - r, fenceMm: uW, fromEdge: 'largo',
-                desc: `Refilado: tope a ${uW} mm desde el borde corto limpio. Queda el largo útil de ${uW} × ${uH} mm.`
+                desc: `Tope a ${uW} mm desde el borde corto limpio. Queda el largo útil de ${uW} × ${uH} mm.`
             }
         ];
     }
@@ -1166,7 +1167,7 @@ class CutOptimizer {
                     leftoverStripId: leftoverId,
                     produces: {
                         keep: describe(a, psA),
-                        leftover: hasB ? (psB.length ? `resto ${dims(b)}` : `sobrante ${dims(b)}`) : 'sin sobrante útil'
+                        leftover: hasB ? (psB.length ? `resto ${dims(b)}` : leftoverLabel(b.w, b.h)) : 'sin sobrante'
                     },
                     partName: psA[0] ? psA[0].name : '',
                     partId: psA[0] ? psA[0].id : null,
@@ -1374,7 +1375,7 @@ class CutOptimizer {
             leftoverAreaMm2: leftoverArea,
             leftoverAreaM2: Math.round((leftoverArea / 1e6) * 1000) / 1000,
             wastePercent: totalUsableArea > 0
-                ? Math.round((1 - totalPlacedArea / totalUsableArea) * 1000) / 10
+                ? Math.max(0, Math.round((1 - (totalPlacedArea + leftoverArea) / totalUsableArea) * 1000) / 10)
                 : 0,
             unplacedCount: (unplacedParts || []).length,
             uniqueFenceCount: sheets.reduce((sum, s) => sum + (s.uniqueFenceCount || 0), 0)

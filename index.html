@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <!-- Dependencias locales: la app funciona sin conexión (ver vendor/README.md) -->
     <link rel="stylesheet" href="vendor/fonts/fonts.css">
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css?v=3.1">
     <script src="vendor/jspdf/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -37,6 +37,7 @@
                     <svg id="theme-toggle-dark-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     <svg id="theme-toggle-light-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                 </button>
+                <button id="btn-help" class="btn btn-secondary" title="Cómo usar MelaminaCut">¿Cómo se usa?</button>
                 <button id="btn-load-preset-mueble" class="btn btn-secondary">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
                     Cargar Mueble Ejemplo
@@ -48,11 +49,26 @@
             </div>
         </header>
 
+        <!-- Guía de inicio (se muestra la primera vez y con "¿Cómo se usa?") -->
+        <div class="glass-card welcome-card" id="welcome-card" hidden>
+            <h2 class="card-title">Arma tu plan de corte en 3 pasos</h2>
+            <ol class="welcome-steps">
+                <li><span class="step-badge">1</span><div><strong>Elige la plancha.</strong> Tamaño, espesor y color, en la tarjeta "Plancha de Melamina".</div></li>
+                <li><span class="step-badge">2</span><div><strong>Escribe tus piezas.</strong> Nombre, largo, ancho y cantidad. Marca los cantos con un clic. O usa "Mueble por medidas".</div></li>
+                <li><span class="step-badge">3</span><div><strong>Revisa el mapa y corta.</strong> Descarga el PDF para el taller, sigue los pasos en "Modo Taller" y envía la cotización a tu cliente.</div></li>
+            </ol>
+            <div class="welcome-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-welcome-example">Ver un ejemplo</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-welcome-close">Entendido</button>
+            </div>
+        </div>
+
         <main class="app-main-layout">
             <!-- Sidebar: Configuración -->
             <aside class="sidebar-config">
                 <div class="glass-card">
                     <h2 class="card-title">
+                        <span class="step-badge" aria-hidden="true">1</span>
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                         Plancha de Melamina
                     </h2>
@@ -101,59 +117,14 @@
                     
                     <div class="form-row">
                         <div class="form-group col-6">
-                            <label for="input-sierra-espesor">Corte Sierra (mm)</label>
-                            <input type="number" id="input-sierra-espesor" class="form-input" value="4" min="1" max="10" step="0.5">
+                            <label for="input-sierra-espesor">Corte de sierra (mm)</label>
+                            <input type="number" id="input-sierra-espesor" class="form-input" value="4" min="1" max="10" step="0.5" aria-describedby="hint-kerf">
+                            <small class="field-hint" id="hint-kerf">Lo que se come la hoja en cada corte (3–4 mm)</small>
                         </div>
                         <div class="form-group col-6">
-                            <label for="input-refilado">Refilado Borde (mm)</label>
-                            <input type="number" id="input-refilado" class="form-input" value="10" min="0" max="50">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="select-metodo-corte">Método de Corte</label>
-                        <select id="select-metodo-corte" class="form-select">
-                            <option value="optimal" selected>Óptimo (PRO)</option>
-                            <option value="horizontal">Largo de Corte (Horizontal)</option>
-                            <option value="vertical">Ancho de Corte (Vertical)</option>
-                            <option value="strips">Pack de tiras (menos cambios de tope)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group inline-checkbox">
-                        <input type="checkbox" id="check-prefer-fence">
-                        <label for="check-prefer-fence">Priorizar menos cambios de tope</label>
-                    </div>
-
-                    <div class="form-group border-config-inputs">
-                        <label>Grosor de Tapacantos (mm)</label>
-                        <div class="form-row" style="margin-bottom:0;">
-                            <div class="col-6">
-                                <label for="input-canto-delgado-val" style="font-size:0.7rem; color:var(--text-muted);">Delgado (D)</label>
-                                <input type="number" id="input-canto-delgado-val" class="form-input" value="0.4" min="0" max="5" step="0.1">
-                            </div>
-                            <div class="col-6">
-                                <label for="input-canto-grueso-val" style="font-size:0.7rem; color:var(--text-muted);">Grueso (G)</label>
-                                <input type="number" id="input-canto-grueso-val" class="form-input" value="2.0" min="0" max="10" step="0.1">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group groove-config-inputs">
-                        <label>Configuración de Surcos (mm)</label>
-                        <div class="form-row" style="margin-bottom:0;">
-                            <div class="col-4" style="margin-bottom:0;">
-                                <label for="input-groove-offset" style="font-size:0.7rem; color:var(--text-muted);">Desplaz.</label>
-                                <input type="number" id="input-groove-offset" class="form-input" value="15" min="0" max="100">
-                            </div>
-                            <div class="col-4" style="margin-bottom:0;">
-                                <label for="input-groove-width" style="font-size:0.7rem; color:var(--text-muted);">Ancho</label>
-                                <input type="number" id="input-groove-width" class="form-input" value="4" min="1" max="20">
-                            </div>
-                            <div class="col-4" style="margin-bottom:0;">
-                                <label for="input-groove-depth" style="font-size:0.7rem; color:var(--text-muted);">Prof.</label>
-                                <input type="number" id="input-groove-depth" class="form-input" value="8" min="0" max="30">
-                            </div>
+                            <label for="input-refilado">Refilado (mm)</label>
+                            <input type="number" id="input-refilado" class="form-input" value="10" min="0" max="50" aria-describedby="hint-refilado">
+                            <small class="field-hint" id="hint-refilado">Borde que se limpia en cada lado de la plancha</small>
                         </div>
                     </div>
 
@@ -161,34 +132,82 @@
                         <input type="checkbox" id="check-descontar-canto" checked>
                         <label for="check-descontar-canto">Descontar tapacanto de las piezas</label>
                     </div>
+                    <small class="field-hint field-hint-check">La medida de corte se reduce el grosor del canto, para que la pieza terminada salga exacta.</small>
 
                     <div class="form-group inline-checkbox">
                         <input type="checkbox" id="check-tiene-veta">
-                        <label for="check-tiene-veta">Considerar veta en la plancha</label>
+                        <label for="check-tiene-veta">La plancha tiene veta (imitación madera)</label>
                     </div>
+                    <small class="field-hint field-hint-check">Las piezas marcadas con "Veta" no se giran, para que el dibujo vaya en el mismo sentido.</small>
 
                     <div class="form-group inline-checkbox">
                         <input type="checkbox" id="check-usar-retazos">
                         <label for="check-usar-retazos">Usar retazos del inventario primero <span class="pro-tag">PRO</span></label>
                     </div>
 
-                    <div class="form-group inline-checkbox">
-                        <input type="checkbox" id="check-busqueda-extra" checked>
-                        <label for="check-busqueda-extra" title="Prueba combinaciones aleatorias adicionales durante ~0,4 s para ahorrar material">Búsqueda extra (mejor aprovechamiento)</label>
-                    </div>
+                    <details class="advanced-options">
+                        <summary>Opciones avanzadas</summary>
 
-                    <div class="form-group">
-                        <label for="input-canto-margen">Despunte de tapacanto (mm por lado)</label>
-                        <input type="number" id="input-canto-margen" class="form-input" value="0" min="0" max="200" title="Sobrante que se agrega a cada lado enchapado al calcular metros de canto">
-                    </div>
+                        <div class="form-group">
+                            <label for="select-metodo-corte">Método de corte</label>
+                            <select id="select-metodo-corte" class="form-select">
+                                <option value="optimal" selected>Óptimo (recomendado)</option>
+                                <option value="horizontal">Rajas a lo largo (horizontal)</option>
+                                <option value="vertical">Rajas a lo ancho (vertical)</option>
+                                <option value="strips">Pack de tiras (menos cambios de tope)</option>
+                            </select>
+                        </div>
 
-                    <div class="workshop-checklist" id="workshop-checklist">
-                        <span id="chk-veta-state">Veta global: OFF</span>
-                        <span id="chk-canto-state">Descontar canto: ON</span>
-                    </div>
+                        <div class="form-group inline-checkbox">
+                            <input type="checkbox" id="check-prefer-fence">
+                            <label for="check-prefer-fence">Priorizar menos cambios de tope</label>
+                        </div>
+
+                        <div class="form-group inline-checkbox">
+                            <input type="checkbox" id="check-busqueda-extra" checked>
+                            <label for="check-busqueda-extra" title="Prueba combinaciones aleatorias adicionales durante ~0,4 s para ahorrar material">Búsqueda extra (mejor aprovechamiento)</label>
+                        </div>
+
+                        <div class="form-group border-config-inputs">
+                            <label>Grosor de tapacantos (mm)</label>
+                            <div class="form-row" style="margin-bottom:0;">
+                                <div class="col-6">
+                                    <label for="input-canto-delgado-val" style="font-size:0.7rem; color:var(--text-muted);">Delgado (D)</label>
+                                    <input type="number" id="input-canto-delgado-val" class="form-input" value="0.4" min="0" max="5" step="0.1">
+                                </div>
+                                <div class="col-6">
+                                    <label for="input-canto-grueso-val" style="font-size:0.7rem; color:var(--text-muted);">Grueso (G)</label>
+                                    <input type="number" id="input-canto-grueso-val" class="form-input" value="2.0" min="0" max="10" step="0.1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="input-canto-margen">Despunte de tapacanto (mm por lado)</label>
+                            <input type="number" id="input-canto-margen" class="form-input" value="0" min="0" max="200" title="Sobrante que se agrega a cada lado enchapado al calcular metros de canto">
+                        </div>
+
+                        <div class="form-group groove-config-inputs">
+                            <label>Surcos para fondos (mm)</label>
+                            <div class="form-row" style="margin-bottom:0;">
+                                <div class="col-4" style="margin-bottom:0;">
+                                    <label for="input-groove-offset" style="font-size:0.7rem; color:var(--text-muted);">Desde el borde</label>
+                                    <input type="number" id="input-groove-offset" class="form-input" value="15" min="0" max="100">
+                                </div>
+                                <div class="col-4" style="margin-bottom:0;">
+                                    <label for="input-groove-width" style="font-size:0.7rem; color:var(--text-muted);">Ancho</label>
+                                    <input type="number" id="input-groove-width" class="form-input" value="4" min="1" max="20">
+                                </div>
+                                <div class="col-4" style="margin-bottom:0;">
+                                    <label for="input-groove-depth" style="font-size:0.7rem; color:var(--text-muted);">Profundidad</label>
+                                    <input type="number" id="input-groove-depth" class="form-input" value="8" min="0" max="30">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
-                <div class="glass-card">
+                <div class="glass-card" data-collapsed-default>
                     <h2 class="card-title">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="12" y1="4" x2="12" y2="20"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
                         Precios y Cotización
@@ -324,8 +343,9 @@
                 <div class="glass-card parts-card">
                     <div class="parts-header">
                         <h2 class="card-title">
+                            <span class="step-badge" aria-hidden="true">2</span>
                             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            Listado de Piezas a Cortar
+                            Piezas a cortar
                         </h2>
                         <div class="parts-quick-presets">
                             <button id="btn-toggle-import" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.25rem;">
@@ -385,7 +405,17 @@
                         </table>
                     </div>
 
+                    <p class="parts-help">
+                        <strong>Tapacantos:</strong> haz clic en L1, L2 (lados largos) o A1, A2 (lados cortos) para cambiar:
+                        sin canto → <span class="legend-chip legend-d">D</span> delgado → <span class="legend-chip legend-g">G</span> grueso.
+                        Marca <strong>Veta</strong> en las piezas que no deben girarse.
+                    </p>
+
                     <div class="table-actions">
+                        <label class="auto-optimize">
+                            <input type="checkbox" id="check-auto-optimize" checked>
+                            Recalcular automáticamente
+                        </label>
                         <button id="btn-add-row" class="btn btn-secondary">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             Agregar Pieza
@@ -462,7 +492,7 @@
                                 <span class="metric-sub-label">Surcos/Ranuras: <strong id="val-metros-ranura">0m</strong></span>
                             </div>
                             <div class="metric-icon">
-                                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="10" rx="1"></rect><path d="M3 7h18" stroke-width="3"></path></svg>
                             </div>
                         </div>
 
@@ -482,7 +512,7 @@
                     <div class="glass-card map-card">
                         <div class="map-header">
                             <div class="map-title-area" style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; width: 100%;">
-                                <h3 class="card-title" style="margin-bottom: 0;">Mapa de Corte</h3>
+                                <h3 class="card-title" style="margin-bottom: 0;"><span class="step-badge" aria-hidden="true">3</span> Mapa de corte</h3>
                                 <div class="material-group-selector" style="display: inline-flex; align-items: center; gap: 0.5rem;">
                                     <label for="select-material-group" style="font-size: 0.8rem; font-weight: bold; color: var(--text-secondary);">Material:</label>
                                     <select id="select-material-group" class="form-select-sm" style="font-weight: 600;">
@@ -496,23 +526,22 @@
                                 </div>
                             </div>
                             <div class="map-actions" style="margin-top: 0.5rem;">
-                                <button id="btn-download-img" class="btn btn-secondary btn-sm">
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                    Descargar Imagen
-                                </button>
-                                <button id="btn-download-pdf" class="btn btn-primary btn-sm">
+                                <button id="btn-download-pdf" class="btn btn-primary btn-sm" title="Planos, pasos de sierra y etiquetas para el taller">
                                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                                    Descargar PDF
-                                </button>
-                                <button id="btn-print-report" class="btn btn-secondary btn-sm">
-                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                                    Imprimir Reporte
+                                    PDF para el taller
                                 </button>
                                 <button id="btn-quote-pdf" class="btn btn-primary btn-sm" title="Cotización para el cliente con los datos de tu taller">Cotización PDF</button>
                                 <button id="btn-share-quote" class="btn btn-secondary btn-sm" title="Enviar la cotización por WhatsApp u otra app">Compartir</button>
-                                <button id="btn-export-csv" data-pro class="btn btn-secondary btn-sm" title="Lista de corte para Excel">Lista CSV</button>
-                                <button id="btn-export-dxf" data-pro class="btn btn-secondary btn-sm" title="Plano de la plancha visible para CAD / CNC">Plano DXF</button>
-                                <button id="btn-register-inventory" data-pro class="btn btn-secondary btn-sm" title="Descuenta los retazos usados y guarda los sobrantes útiles de este corte">Registrar en inventario</button>
+                                <details class="actions-menu">
+                                    <summary class="btn btn-secondary btn-sm">Más ▾</summary>
+                                    <div class="actions-menu-list" role="menu">
+                                        <button id="btn-print-report" class="actions-menu-item" role="menuitem">Imprimir reporte</button>
+                                        <button id="btn-download-img" class="actions-menu-item" role="menuitem">Descargar imagen de la plancha</button>
+                                        <button id="btn-export-csv" data-pro class="actions-menu-item" role="menuitem" title="Lista de corte para Excel">Lista de corte (Excel/CSV)</button>
+                                        <button id="btn-export-dxf" data-pro class="actions-menu-item" role="menuitem" title="Plano de la plancha visible para CAD / CNC">Plano DXF (CAD/CNC)</button>
+                                        <button id="btn-register-inventory" data-pro class="actions-menu-item" role="menuitem" title="Descuenta los retazos usados y guarda los sobrantes útiles de este corte">Registrar en inventario de retazos</button>
+                                    </div>
+                                </details>
                             </div>
                         </div>
 
@@ -561,7 +590,7 @@
                      <div class="glass-card cut-sequence-card">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
                             <div>
-                                <h3 class="card-title" style="margin-bottom: 0;">Secuencia de Cortes Sugerida</h3>
+                                <h3 class="card-title" style="margin-bottom: 0;"><span class="step-badge" aria-hidden="true">4</span> Cortar en el taller</h3>
                                 <p class="card-subtitle" style="margin-bottom: 0; margin-top: 0.25rem;">Realiza los cortes en el orden indicado para separar las piezas siguiendo la regla de guillotina.</p>
                             </div>
                             <div class="sequence-wizard-controls" style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--bg-input-muted); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-color);">
@@ -587,12 +616,12 @@
         </main>
 
         <footer class="app-footer">
-            <p>MelaminaCut &copy; 2026 - Herramienta gratuita para Carpintería y Diseño de Interiores. Diseñado para simplificar tu trabajo.</p>
+            <p>MelaminaCut &copy; 2026 — Optimizador de corte para carpintería y diseño de interiores.</p>
         </footer>
     </div>
 
     <!-- Script loading -->
     <!-- La app usa módulos ES: se debe servir por HTTP (npm run dev), no abrir como archivo -->
-    <script type="module" src="js/app/main.js?v=3.0"></script>
+    <script type="module" src="js/app/main.js?v=3.1"></script>
 </body>
 </html>

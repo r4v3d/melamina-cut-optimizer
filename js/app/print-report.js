@@ -58,7 +58,7 @@ export function generatePrintReport() {
                 cutsHtml = '<li>No se requieren cortes para esta plancha.</li>';
             } else {
                 sheet.cuts.forEach((cut, cIdx) => {
-                    cutsHtml += `<li><strong>Paso ${cut.seq || cIdx + 1} (${cutKindLabel(cut)}):</strong> ${escapeHtml(cut.desc)}</li>`;
+                    cutsHtml += `<li><strong>Paso ${cut.seq || cIdx + 1} · ${cutKindLabel(cut)}</strong> — ${escapeHtml(cut.desc)}</li>`;
                 });
             }
 

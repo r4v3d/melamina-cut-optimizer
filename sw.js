@@ -1,7 +1,7 @@
 // Service worker de MelaminaCut: permite usar la app sin conexión.
 // Estrategia: primero la red (siempre la versión más reciente) y, sin conexión, la copia en caché.
 
-const CACHE = 'melaminacut-v5';
+const CACHE = 'melaminacut-v6';
 
 const APP_SHELL = [
     './',
@@ -78,7 +78,8 @@ self.addEventListener('fetch', (event) => {
 
     event.respondWith((async () => {
         try {
-            const res = await fetch(req);
+            // Revalidar siempre con el servidor (304 si no cambió): tras publicar no se mezclan versiones
+            const res = await fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' }));
             if (res.ok) {
                 const copy = res.clone();
                 caches.open(CACHE).then(cache => cache.put(req, copy));

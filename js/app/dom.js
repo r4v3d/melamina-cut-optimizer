@@ -77,6 +77,7 @@ export const dom = {
     partsTbody: $('parts-tbody'),
     btnAddRow: $('btn-add-row'),
     btnOptimize: $('btn-optimize'),
+    checkAutoOptimize: $('check-auto-optimize'),
     btnClearAll: $('btn-clear-all'),
     btnLoadPresetMueble: $('btn-load-preset-mueble'),
 
