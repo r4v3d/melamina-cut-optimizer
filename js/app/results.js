@@ -11,14 +11,17 @@ import { toast, confirmDialog } from './ui-feedback.js';
 import { computeQuote } from '../quote-calc.js';
 import { materialsStore } from './store.js';
 import { isPro } from './plan.js';
+import { updateResultBadge } from './tabs.js';
+import { CutOptimizer } from '../optimizer.js';
 
 const UNPLACED_REASONS = {
     too_large: 'No cabe en la plancha (ni rotada)',
     invalid_size: 'Medida de corte inválida (revise tapacantos)',
     no_space: 'Sin espacio residual suficiente (kerf)',
-    removed: 'Quitada manualmente del mapa'
+    removed: 'Quitada manualmente del mapa',
+    no_stock: 'No alcanzan las planchas disponibles (pestaña Planchas)'
 };
-const PLACEABLE_REASONS = new Set(['no_space', 'removed']);
+const PLACEABLE_REASONS = new Set(['no_space', 'removed', 'no_stock']);
 
 // Llamado por optimize.js cuando llega un resultado nuevo
 export function onNewResults(results) {
@@ -35,6 +38,7 @@ export function onNewResults(results) {
     });
     state.activeMaterialGroup = materialKeys[0] || 'Estándar 18mm';
     displayResults(false);
+    updateResultBadge(results);
 }
 
 export function clearResults() {
@@ -44,6 +48,47 @@ export function clearResults() {
     if (dom.resultsStaleBanner) dom.resultsStaleBanner.hidden = true;
     dom.resultsSection.style.display = 'none';
     dom.unplacedContainer.style.display = 'none';
+    updateResultBadge(null);
+}
+
+// Resumen en una sola tabla (como SketchCut): planchas, piezas, sobrantes, desperdicio, cortes, cantos, ranuras
+function renderSummary() {
+    const body = document.getElementById('summary-tbody');
+    if (!body || !state.results) return;
+    const m2 = mm2 => `${(mm2 / 1e6).toFixed(2)} m²`;
+    let sheetsN = 0, sheetsArea = 0, remN = 0, remArea = 0, partsN = 0, partsArea = 0, leftN = 0, leftArea = 0;
+    let dN = 0, gN = 0, grooveN = 0;
+    for (const g of Object.values(state.results.groups)) {
+        for (const s of g.sheets) {
+            if (s.isRemnant) { remN++; remArea += s.w * s.h; } else { sheetsN++; sheetsArea += s.w * s.h; }
+            for (const p of s.placedParts) {
+                partsN++;
+                partsArea += p.w * p.h;
+                (p.cantos || []).forEach(c => { if (c === 1) dN++; if (c === 2) gN++; });
+                (p.grooves || []).forEach(gr => { if (gr === 1) grooveN++; });
+            }
+            for (const r of s.freeRects) {
+                if (CutOptimizer.isUsefulLeftover(r)) { leftN++; leftArea += r.w * r.h; }
+            }
+        }
+    }
+    const total = sheetsArea + remArea;
+    const waste = Math.max(0, total - partsArea - leftArea);
+    const m = state.results.metrics;
+    const rowsHtml = [
+        ['Planchas nuevas', sheetsN, m2(sheetsArea)],
+        ...(remN ? [['Retazos usados', remN, m2(remArea)]] : []),
+        ['Piezas', partsN, m2(partsArea)],
+        ['Sobrantes útiles', leftN, m2(leftArea)],
+        ['Desperdicio (aserrín, refilado, tiras)', '—', `${m2(waste)} · ${total ? Math.round(waste / total * 1000) / 10 : 0}%`],
+        ['Cortes de sierra', m.totalCutsCount, `${m.totalCutsLength} m`],
+        ['Tapacanto delgado (bordes)', dN, `${m.cantoDelgado} m`],
+        ['Tapacanto grueso (bordes)', gN, `${m.cantoGrueso} m`],
+        ['Ranuras', grooveN, `${m.totalGroovesLength} m`],
+        ...(state.results.unplacedParts.length ? [['Piezas sin colocar', state.results.unplacedParts.length, '—']] : [])
+    ];
+    body.innerHTML = rowsHtml.map(([a, b, c]) =>
+        `<tr><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td><td>${escapeHtml(c)}</td></tr>`).join('');
 }
 
 // Precio de plancha nueva: el del catálogo (Pro) o, si no, el "Costo Plancha" del sidebar
@@ -175,7 +220,53 @@ async function placeUnplacedPart(part, matName) {
 }
 
 // Edición manual desde el mapa (girar / quitar pieza)
-export function onCanvasEdit({ type, part }) {
+// Destinos del menú "Mover a…": las otras planchas del material y una nueva
+export function moveTargets() {
+    const group = currentGroup();
+    if (!group) return [];
+    const list = group.sheets
+        .map((s, i) => ({ index: i, label: `Mover a ${sheetTitle(s, i)}` }))
+        .filter(t => t.index !== state.activeSheetIndex);
+    list.push({ index: 'new', label: 'Mover a una plancha nueva' });
+    return list;
+}
+
+function moveToSheet(group, sheet, part, target) {
+    const opt = optimizerForGroup(group);
+    let targetSheet;
+    let targetIndex;
+    if (target === 'new') {
+        targetSheet = opt.createNewSheet(group.sheets.filter(s => !s.isRemnant).length + 1);
+    } else {
+        targetSheet = group.sheets[target];
+        targetIndex = target;
+    }
+    if (!targetSheet) return;
+    const placed = opt.placeOnSheet({ ...part }, targetSheet);
+    if (!placed) {
+        toast(`No hay espacio para "${part.name}" en esa plancha.`, { type: 'warn' });
+        return;
+    }
+    if (target === 'new') {
+        group.sheets.push(targetSheet);
+        targetIndex = group.sheets.length - 1;
+    }
+    sheet.placedParts = sheet.placedParts.filter(p => p !== part);
+    const sourceIndex = group.sheets.indexOf(sheet);
+    if (sheet.placedParts.length === 0) {
+        group.sheets.splice(sourceIndex, 1);
+        if (sourceIndex < targetIndex) targetIndex--;
+        group.sheets.forEach((s, i) => { if (!s.isStock) s.id = i + 1; });
+    } else {
+        opt.rebuildSheet(sheet);
+    }
+    state.activeSheetIndex = targetIndex;
+    state.activeCutStepIndex = -1;
+    toast(`"${part.name}" se movió a ${sheetTitle(targetSheet, targetIndex)}.`, { type: 'success' });
+    recalculateStatsAndDisplay();
+}
+
+export function onCanvasEdit({ type, part, target }) {
     const group = currentGroup();
     const sheet = currentSheet();
     if (!group || !sheet) return;
@@ -183,6 +274,11 @@ export function onCanvasEdit({ type, part }) {
     if (type === 'remove') {
         sheet.placedParts = sheet.placedParts.filter(p => p !== part);
         group.unplacedParts.push({ ...part, unplacedReason: 'removed' });
+    }
+
+    if (type === 'moveTo') {
+        moveToSheet(group, sheet, part, target);
+        return;
     }
 
     if (sheet.placedParts.length === 0) {
@@ -205,7 +301,7 @@ export function recalculateStatsAndDisplay() {
 export function displayResults(preserveActiveSheet = false) {
     const results = state.results;
     if (!results) return;
-    dom.resultsSection.style.display = 'block';
+    dom.resultsSection.style.display = ''; // el CSS lo muestra en columna (flex)
 
     const cfg = results.config || {};
     dom.txtCantoDelLegend.textContent = cfg.cantoDelgadoEspesor ?? dom.inputCantoDelgadoVal.value;
@@ -213,6 +309,7 @@ export function displayResults(preserveActiveSheet = false) {
     if (state.canvas) state.canvas.grooveSpec = readGrooveSpec();
 
     renderMetrics(results.metrics);
+    renderSummary();
     renderQuote();
     renderUnplaced();
 

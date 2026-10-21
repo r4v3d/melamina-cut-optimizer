@@ -11,6 +11,7 @@ import { toast } from './ui-feedback.js';
 import { downloadFile } from './modal.js';
 
 const PAGE_W = 210;
+const fmtIsoDate = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; };
 const MARGIN = 15;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
@@ -50,6 +51,14 @@ export function exportPdf() {
     // Encabezado
     printText('MelaminaCut - Reporte de Corte Profesional', 18, true, '#f97316');
     printText('Generado el: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString(), 9, false, '#64748b');
+    // Datos del pedido (como SketchCut)
+    const pedido = [
+        dom.inputProjectName.value.trim() && `Proyecto: ${dom.inputProjectName.value.trim()}`,
+        dom.inputClientName.value.trim() && `Cliente: ${dom.inputClientName.value.trim()}`,
+        dom.inputOrderDate && dom.inputOrderDate.value && `Pedido: ${fmtIsoDate(dom.inputOrderDate.value)}`,
+        dom.inputDeliveryDate && dom.inputDeliveryDate.value && `Entrega: ${fmtIsoDate(dom.inputDeliveryDate.value)}`
+    ].filter(Boolean).join('   ·   ');
+    if (pedido) printText(pedido, 9, true, '#0f172a');
     y += 2;
     doc.setDrawColor(249, 115, 22);
     doc.setLineWidth(0.5);
@@ -212,7 +221,7 @@ export function exportPdf() {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8);
             doc.text(`LxA corte ${lab.cut} mm`, x + 2, y + 21);
-            doc.text(truncateText(lab.material, lw - 4), x + 2, y + 26);
+            doc.text(truncateText(lab.nota ? `${lab.material} · ${lab.nota}` : lab.material, lw - 4), x + 2, y + 26);
             x += lw + gap;
         });
     }

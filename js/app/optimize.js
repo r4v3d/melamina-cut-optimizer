@@ -10,6 +10,8 @@ import { onNewResults } from './results.js';
 import { toast, confirmDialog } from './ui-feedback.js';
 import { materialsStore, retazosStore } from './store.js';
 import { isPro } from './plan.js';
+import { buildSheetPlans } from './stock-ui.js';
+import { currentTab, setTab } from './tabs.js';
 
 const optimizeBtnDefaultHtml = dom.btnOptimize.innerHTML;
 let optimizeGeneration = 0;
@@ -47,11 +49,14 @@ function runOnMainThread(config, rawParts, options) {
 }
 
 // Plancha por material (catálogo) y retazos disponibles (si se pidió usarlos). Ambos son Pro.
-function readOptimizeOptions() {
+function readOptimizeOptions(rawParts) {
     const pro = isPro();
+    const materials = [...new Set(rawParts.map(p => p.material || 'Estándar 18mm'))];
     return {
         materials: pro ? materialsStore.optimizerMap() : {},
-        stock: pro && dom.checkUsarRetazos.checked ? retazosStore.stockMap() : {}
+        stock: pro && dom.checkUsarRetazos.checked ? retazosStore.stockMap() : {},
+        // Planchas del proyecto (pestaña Planchas)
+        sheets: buildSheetPlans(materials)
     };
 }
 
@@ -118,7 +123,7 @@ function setBusy(busy, progress = 0) {
 }
 
 // silent: recálculo automático; no muestra avisos ni pide confirmaciones (si falta algo, espera)
-export async function runOptimization({ silent = false } = {}) {
+export async function runOptimization({ silent = false, switchToResults = false } = {}) {
     clearTimeout(autoTimer);
     const rawParts = readRawParts();
     if (rawParts.length === 0) {
@@ -144,7 +149,7 @@ export async function runOptimization({ silent = false } = {}) {
     }
 
     const config = readOptimizerConfig();
-    const options = readOptimizeOptions();
+    const options = readOptimizeOptions(rawParts);
     const gen = ++optimizeGeneration;
     setBusy(true);
 
@@ -158,6 +163,8 @@ export async function runOptimization({ silent = false } = {}) {
         // Configuración con la que se calculó (las ediciones posteriores no deben leer inputs cambiados)
         results.config = config;
         onNewResults(results);
+        // Al pulsar "Optimizar" desde Piezas o Planchas, mostrar el resultado
+        if (switchToResults && (currentTab() === 'piezas' || currentTab() === 'planchas')) setTab('resultado');
     } catch (err) {
         if (gen === optimizeGeneration) {
             toast(`Error de optimización: ${err.message}`, { type: 'error' });
@@ -168,7 +175,7 @@ export async function runOptimization({ silent = false } = {}) {
 }
 
 export function initOptimize() {
-    dom.btnOptimize.addEventListener('click', () => runOptimization());
+    dom.btnOptimize.addEventListener('click', () => runOptimization({ switchToResults: true }));
     if (dom.checkAutoOptimize) {
         try {
             dom.checkAutoOptimize.checked = localStorage.getItem(AUTO_KEY) !== '0';

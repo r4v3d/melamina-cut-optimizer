@@ -26,6 +26,8 @@ export const dom = {
     inputProjectName: $('input-project-name'),
     inputClientName: $('input-client-name'),
     inputClientPhone: $('input-client-phone'),
+    inputOrderDate: $('input-order-date'),
+    inputDeliveryDate: $('input-delivery-date'),
     btnProjects: $('btn-projects'),
     btnCatalog: $('btn-catalog'),
     btnRetazos: $('btn-retazos'),

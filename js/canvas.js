@@ -13,6 +13,10 @@ export class CutMapCanvas {
         this.onEdit = options.onEdit || null;
         this.notify = options.onNotice || (msg => alert(msg));
         this.onHoverPart = options.onHoverPart || null; // (pieza | null) al pasar el mouse
+        // Destinos para "Mover a otra plancha": () => [{ index, label }]
+        this.getMoveTargets = options.getMoveTargets || (() => []);
+        this.editMode = false;   // modo Editar: arrastrar piezas
+        this.dragPart = null;    // { part, offX, offY, origX, origY }
         this.highlightRowId = null; // resalta las piezas de una fila de la tabla
         this.grooveSpec = { offset: 15, width: 4, depth: 8 };
         this.ctx = this.canvas.getContext('2d');
@@ -106,9 +110,60 @@ export class CutMapCanvas {
     }
 
     initEvents() {
+        // Modo Editar: arrastrar una pieza (mouse o dedo)
+        this.canvas.addEventListener('pointerdown', (e) => {
+            if (!this.editMode || !this.sheet || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            const pt = this.toSheetCoords(e.clientX, e.clientY);
+            const part = this.partAt(pt.x, pt.y);
+            if (!part) return;
+            this.hideContextMenu();
+            this.suppressClick = false;
+            this.dragPart = { part, offX: pt.x - part.x, offY: pt.y - part.y, origX: part.x, origY: part.y, moved: false };
+            this.canvas.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        });
+        this.canvas.addEventListener('pointermove', (e) => {
+            if (!this.dragPart) return;
+            const pt = this.toSheetCoords(e.clientX, e.clientY);
+            const d = this.dragPart;
+            const snapped = this.snapPosition(d.part, pt.x - d.offX, pt.y - d.offY);
+            if (Math.abs(snapped.x - d.part.x) > 0.01 || Math.abs(snapped.y - d.part.y) > 0.01) d.moved = true;
+            d.part.x = snapped.x;
+            d.part.y = snapped.y;
+            this.scheduleRender();
+            e.preventDefault();
+        });
+        const endDrag = () => {
+            const d = this.dragPart;
+            if (!d) return;
+            this.dragPart = null;
+            // El "click" que llega justo después de soltar no debe abrir el menú
+            this.suppressClick = d.moved;
+            if (d.moved) setTimeout(() => { this.suppressClick = false; }, 400);
+            if (!d.moved) {
+                d.part.x = d.origX;
+                d.part.y = d.origY;
+                return;
+            }
+            if (!this.isValidPosition(d.part, d.part.x, d.part.y)) {
+                d.part.x = d.origX;
+                d.part.y = d.origY;
+                this.render();
+                this.notify('No se puede dejar ahí: se encima con otra pieza, no deja espacio para la sierra o sale del área útil.');
+                return;
+            }
+            d.part.x = CutOptimizer.round1(d.part.x);
+            d.part.y = CutOptimizer.round1(d.part.y);
+            this.resetCutHighlight();
+            if (this.onEdit) this.onEdit({ type: 'move', part: d.part });
+            else this.render();
+        };
+        this.canvas.addEventListener('pointerup', endDrag);
+        this.canvas.addEventListener('pointercancel', endDrag);
+
         // Drag/Pan Events
         this.wrapper.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return; // Left click only
+            if (e.button !== 0 || this.dragPart) return; // Left click only
             this.isDragging = true;
             this.startX = e.clientX - this.panX;
             this.startY = e.clientY - this.panY;
@@ -158,6 +213,7 @@ export class CutMapCanvas {
         };
 
         this.wrapper.addEventListener('touchstart', (e) => {
+            if (this.dragPart) return;
             if (e.touches.length === 2) {
                 pinchDist = dist(e.touches);
                 panTouch = null;
@@ -176,7 +232,7 @@ export class CutMapCanvas {
                 this.zoomAt(midX, midY, d / pinchDist);
                 pinchDist = d;
                 e.preventDefault();
-            } else if (e.touches.length === 1 && panTouch) {
+            } else if (e.touches.length === 1 && panTouch && !this.dragPart) {
                 this.panX = e.touches[0].clientX - panTouch.x;
                 this.panY = e.touches[0].clientY - panTouch.y;
                 this.scheduleRender();
@@ -197,6 +253,10 @@ export class CutMapCanvas {
 
         this.canvas.addEventListener('click', (e) => {
             if (this.isDragging) return;
+            if (this.suppressClick) {
+                this.suppressClick = false;
+                return;
+            }
             this.handleTap(e.clientX, e.clientY);
         });
 
@@ -235,7 +295,82 @@ export class CutMapCanvas {
 
     // Sin zoom, el dedo hace scroll vertical de la página; con zoom, mueve el mapa
     updateTouchAction() {
-        this.wrapper.style.touchAction = this.isZoomedIn() ? 'none' : 'pan-y';
+        this.wrapper.style.touchAction = (this.isZoomedIn() || this.editMode) ? 'none' : 'pan-y';
+    }
+
+    setEditMode(on) {
+        this.editMode = !!on;
+        this.wrapper.classList.toggle('is-editing', this.editMode);
+        this.updateTouchAction();
+        this.render();
+    }
+
+    toSheetCoords(clientX, clientY) {
+        const r = this.canvas.getBoundingClientRect();
+        return { x: (clientX - r.left - this.panX) / this.scale, y: (clientY - r.top - this.panY) / this.scale };
+    }
+
+    partAt(x, y) {
+        const parts = this.sheet ? this.sheet.placedParts : [];
+        for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i];
+            if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return p;
+        }
+        return null;
+    }
+
+    // Ajusta la posición a los bordes útiles y a las piezas vecinas (dejando el kerf) si están cerca
+    snapPosition(part, x, y) {
+        const s = this.sheet;
+        const kerf = s.kerf != null ? s.kerf : 4;
+        const r = s.refilado || 0;
+        const tol = 14 / this.scale; // 14 px de pantalla
+        // Prioridad 1: bordes útiles y vecinos dejando justo el kerf (lo que permite cortar en guillotina)
+        const hardX = [r, r + s.usableW - part.w];
+        const hardY = [r, r + s.usableH - part.h];
+        // Prioridad 2: alinear con los bordes de otras piezas
+        const alignX = [];
+        const alignY = [];
+        for (const o of s.placedParts) {
+            if (o === part) continue;
+            hardX.push(o.x + o.w + kerf, o.x - kerf - part.w);
+            hardY.push(o.y + o.h + kerf, o.y - kerf - part.h);
+            alignX.push(o.x, o.x + o.w - part.w);
+            alignY.push(o.y, o.y + o.h - part.h);
+        }
+        const nearest = (v, list) => {
+            let best = null;
+            let bestD = tol;
+            for (const c of list) {
+                const dd = Math.abs(c - v);
+                if (dd <= bestD) { best = c; bestD = dd; }
+            }
+            return best;
+        };
+        const snap = (v, hard, align) => {
+            const h = nearest(v, hard);
+            if (h !== null) return h;
+            const a = nearest(v, align);
+            return a !== null ? a : v;
+        };
+        x = snap(x, hardX, alignX);
+        y = snap(y, hardY, alignY);
+        // Dentro del área útil
+        x = Math.max(r, Math.min(x, r + s.usableW - part.w));
+        y = Math.max(r, Math.min(y, r + s.usableH - part.h));
+        return { x, y };
+    }
+
+    // Sin salir del área útil y con al menos el kerf entre piezas
+    isValidPosition(part, x, y) {
+        const s = this.sheet;
+        const kerf = s.kerf != null ? s.kerf : 4;
+        const r = s.refilado || 0;
+        const E = 0.2;
+        if (x < r - E || y < r - E || x + part.w > r + s.usableW + E || y + part.h > r + s.usableH + E) return false;
+        return s.placedParts.every(o => o === part ||
+            x + part.w + kerf <= o.x + E || o.x + o.w + kerf <= x + E ||
+            y + part.h + kerf <= o.y + E || o.y + o.h + kerf <= y + E);
     }
 
     // Zoom manteniendo fijo el punto (x, y) del contenedor
@@ -1057,6 +1192,11 @@ export class CutMapCanvas {
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
                     Girar 90°
                 </button>
+                ${this.getMoveTargets().map(t => `
+                <button class="context-menu-item" data-move-target="${t.index}">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+                    ${escapeHtml(t.label)}
+                </button>`).join('')}
                 <button class="context-menu-item danger" id="ctx-remove">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     Quitar Pieza
@@ -1124,6 +1264,15 @@ export class CutMapCanvas {
         bindButtonAction(document.getElementById('ctx-remove'), () => {
             this.removePartManually(part);
             this.hideContextMenu();
+        });
+
+        menu.querySelectorAll('[data-move-target]').forEach(btn => {
+            bindButtonAction(btn, () => {
+                const target = btn.dataset.moveTarget === 'new' ? 'new' : Number(btn.dataset.moveTarget);
+                this.hideContextMenu();
+                this.resetCutHighlight();
+                if (this.onEdit) this.onEdit({ type: 'moveTo', part, target });
+            });
         });
         
         setTimeout(() => {

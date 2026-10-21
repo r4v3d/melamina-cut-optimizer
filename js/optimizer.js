@@ -116,6 +116,7 @@ class CutOptimizer {
                     color: p.color || "#06b6d4",
                     originalIndex: p.index,
                     rowId: p.rowId,
+                    nota: p.nota || '',
                     invalid: invalid,
                     unplacedReason: invalid ? 'invalid_size' : null
                 });
@@ -204,10 +205,14 @@ class CutOptimizer {
      * options.onProgress(fraccion 0..1): avance
      * options.materials: { [material]: { planchaLargo, planchaAncho, tieneVetaGlobal } } plancha por material
      * options.stock: { [material]: [{ id, largo, ancho }] } retazos del inventario a usar primero
+     * options.sheets: { [material]: { finite: [{ largo, ancho, isRemnant }], unlimited: { largo, ancho } | null } }
+     *   planchas del proyecto (pestaña Planchas): las de cantidad limitada se usan primero; si no hay
+     *   ninguna ilimitada ni allowNew: true, no se abren planchas nuevas y lo que no entra queda sin colocar ('no_stock')
      */
     optimize(rawParts, options = {}) {
         const materials = options.materials || {};
         const stock = options.stock || {};
+        const sheetPlans = options.sheets || {};
 
         const rawGroups = {};
         for (const p of rawParts) {
@@ -217,7 +222,16 @@ class CutOptimizer {
         }
         const matNames = Object.keys(rawGroups);
         const groupOpt = {};
-        for (const mat of matNames) groupOpt[mat] = this.forMaterial(materials[mat]);
+        for (const mat of matNames) {
+            const plan = sheetPlans[mat];
+            const matCfg = plan && plan.unlimited
+                ? { ...(materials[mat] || {}), planchaLargo: plan.unlimited.largo, planchaAncho: plan.unlimited.ancho }
+                : materials[mat];
+            const opt = this.forMaterial(matCfg);
+            groupOpt[mat] = opt === this ? new CutOptimizer(this.config) : opt;
+            // Planchas nuevas: sin plan, con una fila ilimitada, o si el plan las permite (medida estándar)
+            groupOpt[mat].allowNewSheets = !plan || !!plan.unlimited || plan.allowNew === true;
+        }
 
         const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
         const searching = this.searchTimeMs > 0;
@@ -233,7 +247,12 @@ class CutOptimizer {
             const onSearch = onProgress && searching
                 ? f => onProgress(detWeight + (1 - detWeight) * ((gi + f) / matNames.length))
                 : null;
-            const result = opt.optimizeGroup(opt.prepareParts(rawGroups[mat]), onStep, stock[mat] || [], onSearch);
+            const plan = sheetPlans[mat];
+            const finite = [
+                ...((plan && plan.finite) || []),
+                ...(stock[mat] || []).map(r => ({ ...r, isRemnant: true, remnantId: r.id }))
+            ];
+            const result = opt.optimizeGroup(opt.prepareParts(rawGroups[mat]), onStep, finite, onSearch);
             result.config = opt.configSnapshot();
             optimizedGroups[mat] = result;
         });
@@ -481,8 +500,14 @@ class CutOptimizer {
 
     // remnants: retazos del inventario [{ id, largo, ancho }] que se llenan antes de abrir planchas nuevas
     optimizeGroup(parts, onStep = null, remnants = [], onSearch = null) {
-        const maxUsableLargo = this.usableWidth();
-        const maxUsableAncho = this.usableHeight();
+        // Medidas útiles de todas las planchas posibles (las nuevas, si se permiten, y las del stock)
+        const usableSizes = remnants
+            .filter(r => finiteOr(r.largo, 0) > 0 && finiteOr(r.ancho, 0) > 0)
+            .map(r => {
+                const m = r.isRemnant ? 0 : this.refilado;
+                return [r.largo - 2 * m, r.ancho - 2 * m];
+            });
+        if (this.allowNewSheets !== false) usableSizes.push([this.usableWidth(), this.usableHeight()]);
 
         const validParts = [];
         const unplacedParts = [];
@@ -493,10 +518,10 @@ class CutOptimizer {
                 continue;
             }
 
-            const fitsAsIs = this.canFit(p.largo, p.ancho, maxUsableLargo, maxUsableAncho);
-            const fitsRotated = !p.veta && this.canFit(p.ancho, p.largo, maxUsableLargo, maxUsableAncho);
+            const fits = usableSizes.some(([uw, uh]) =>
+                this.canFit(p.largo, p.ancho, uw, uh) || (!p.veta && this.canFit(p.ancho, p.largo, uw, uh)));
 
-            if (fitsAsIs || fitsRotated) {
+            if (fits) {
                 validParts.push(p);
             } else {
                 unplacedParts.push({ ...p, unplacedReason: 'too_large' });
@@ -589,7 +614,7 @@ class CutOptimizer {
         return `s${sheet.nextStripId - 1}`;
     }
 
-    // spec opcional para retazos: { w, h, refilado, remnantId }
+    // spec opcional para planchas del stock: { w, h, refilado, remnantId, isRemnant }
     createNewSheet(sheetId, spec = null) {
         const w = spec ? spec.w : this.planchaLargo;
         const h = spec ? spec.h : this.planchaAncho;
@@ -604,7 +629,9 @@ class CutOptimizer {
             kerf: this.espesorSierra,
             usableW,
             usableH,
-            isRemnant: !!(spec && spec.remnantId),
+            // Retazo: no se cobra (inventario o retazo de la pestaña Planchas)
+            isRemnant: !!(spec && (spec.isRemnant ?? spec.remnantId)),
+            isStock: !!spec,
             remnantId: spec ? spec.remnantId || null : null,
             nextStripId: 1,
             placedParts: [],
@@ -626,11 +653,13 @@ class CutOptimizer {
         };
     }
 
-    // remnants: retazos (canto ya limpio, sin refilado) que se llenan antes de abrir planchas nuevas
+    // remnants: planchas del stock (retazos sin refilado y planchas limitadas) que se llenan antes de abrir nuevas
     packWithStrategy(parts, strategy, remnants = []) {
         const sorted = strategy.presorted ? this.cloneParts(parts) : this.sortParts(parts, strategy.sort);
-        const sheets = remnants.map((r, i) =>
-            this.createNewSheet('R' + (i + 1), { w: r.largo, h: r.ancho, refilado: 0, remnantId: r.id }));
+        const sheets = remnants.map((r, i) => this.createNewSheet(
+            (r.isRemnant ? 'R' : 'S') + (i + 1),
+            { w: r.largo, h: r.ancho, refilado: r.isRemnant ? 0 : this.refilado, remnantId: r.remnantId || null, isRemnant: !!r.isRemnant }
+        ));
         let newSheets = 0;
         const unplacedParts = [];
 
@@ -648,6 +677,11 @@ class CutOptimizer {
                 }
             }
 
+            if (!placed && this.allowNewSheets === false) {
+                unplacedParts.push({ ...part, unplacedReason: 'no_stock' });
+                continue;
+            }
+
             if (!placed) {
                 const newSheet = this.createNewSheet(++newSheets);
                 const placement = strategy.pack === 'strips'
@@ -663,8 +697,8 @@ class CutOptimizer {
             }
         }
 
-        // Los retazos que no se usaron no forman parte del resultado
-        const used = sheets.filter(s => !s.isRemnant || s.placedParts.length > 0);
+        // Las planchas del stock que no se usaron no forman parte del resultado
+        const used = sheets.filter(s => !s.isStock || s.placedParts.length > 0);
         for (const sheet of used) {
             this.finalizeSheetCuts(sheet);
         }

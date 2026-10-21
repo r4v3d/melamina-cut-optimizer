@@ -7,6 +7,7 @@ import { applySettings, readSettings } from './settings.js';
 import { addNewRow, getRowData, loadFurniturePreset, readRawParts } from './parts-table.js';
 import { runOptimization } from './optimize.js';
 import { projectsStore, newId } from './store.js';
+import { applyStockState, getStockState } from './stock-ui.js';
 
 const STATE_KEY = 'melaminacut_project_state_pro';
 const LEGACY_STATE_KEY = 'melaminacut_project_state';
@@ -24,8 +25,11 @@ export function collectProjectState() {
         ...readSettings(),
         project: {
             name: dom.inputProjectName.value.trim(),
-            client: { nombre: dom.inputClientName.value.trim(), telefono: dom.inputClientPhone.value.trim() }
+            client: { nombre: dom.inputClientName.value.trim(), telefono: dom.inputClientPhone.value.trim() },
+            fechaPedido: dom.inputOrderDate ? dom.inputOrderDate.value : '',
+            fechaEntrega: dom.inputDeliveryDate ? dom.inputDeliveryDate.value : ''
         },
+        stock: getStockState(),
         parts
     };
 }
@@ -47,6 +51,9 @@ export function applyProjectState(saved) {
     dom.inputProjectName.value = (s.project && s.project.name) || '';
     dom.inputClientName.value = (s.project && s.project.client && s.project.client.nombre) || '';
     dom.inputClientPhone.value = (s.project && s.project.client && s.project.client.telefono) || '';
+    if (dom.inputOrderDate) dom.inputOrderDate.value = (s.project && s.project.fechaPedido) || '';
+    if (dom.inputDeliveryDate) dom.inputDeliveryDate.value = (s.project && s.project.fechaEntrega) || '';
+    applyStockState(s.stock);
     dom.partsTbody.innerHTML = '';
     if (s.parts && s.parts.length) s.parts.forEach(p => addNewRow(p));
     else addNewRow();

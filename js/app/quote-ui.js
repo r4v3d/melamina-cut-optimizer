@@ -223,6 +223,12 @@ function buildQuotePdf() {
     doc.setTextColor('#475569');
     doc.text(`Fecha: ${today.toLocaleDateString()}`, M, y);
     doc.text(`Válida hasta: ${validUntil.toLocaleDateString()}`, RIGHT, y, { align: 'right' });
+    const entrega = dom.inputDeliveryDate && dom.inputDeliveryDate.value;
+    if (entrega) {
+        const [yy, mm, dd] = entrega.split('-');
+        y += 5;
+        doc.text(`Entrega estimada: ${dd}/${mm}/${yy}`, M, y);
+    }
     y += 7;
 
     // Cliente

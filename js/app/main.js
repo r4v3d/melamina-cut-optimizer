@@ -7,7 +7,7 @@ import { PLANCHA_PRESETS } from '../presets.js';
 import { applySettings, initSettings, readSettings, updateWorkshopChecklist } from './settings.js';
 import { addNewRow, getRowData, highlightRow, initPartsTable } from './parts-table.js';
 import { initOptimize, markResultsStale } from './optimize.js';
-import { clearResults, initResults, onCanvasEdit, onNewResults } from './results.js';
+import { clearResults, initResults, moveTargets, onCanvasEdit, onNewResults } from './results.js';
 import { toast } from './ui-feedback.js';
 import { initSequence } from './sequence.js';
 import { initPrintReport } from './print-report.js';
@@ -22,6 +22,8 @@ import { initFurnitureUi } from './furniture-ui.js';
 import { initQuoteUi } from './quote-ui.js';
 import { initExportsUi } from './exports-ui.js';
 import { initPlan, onPlanChange } from './plan.js';
+import { initTabs, setTab } from './tabs.js';
+import { initStockUi } from './stock-ui.js';
 import { renderQuote } from './results.js';
 import { loadStateFromLocalStorage, saveStateToLocalStorage } from './persistence.js';
 import { isNativeApp, initNative } from './native.js';
@@ -29,7 +31,17 @@ import { isNativeApp, initNative } from './native.js';
 state.canvas = new CutMapCanvas('cut-map-canvas', {
     onEdit: onCanvasEdit,
     onNotice: msg => toast(msg, { type: 'warn' }),
-    onHoverPart: part => highlightRow(part ? part.rowId : null)
+    onHoverPart: part => highlightRow(part ? part.rowId : null),
+    getMoveTargets: () => moveTargets()
+});
+
+// Modo Editar del mapa: arrastrar piezas
+const btnEditMode = document.getElementById('btn-edit-mode');
+btnEditMode?.addEventListener('click', () => {
+    const on = !state.canvas.editMode;
+    state.canvas.setEditMode(on);
+    btnEditMode.setAttribute('aria-pressed', String(on));
+    if (on) toast('Modo Editar: arrastra una pieza para moverla. Toca una pieza para girarla o pasarla a otra plancha.', { duration: 6000 });
 });
 
 // Presets de plancha ("Personalizada" cuando las medidas se escriben a mano)
@@ -69,6 +81,7 @@ document.getElementById('btn-help')?.addEventListener('click', () => showWelcome
 document.getElementById('btn-welcome-close')?.addEventListener('click', dismissWelcome);
 document.getElementById('btn-welcome-example')?.addEventListener('click', () => {
     dismissWelcome();
+    setTab('piezas');
     dom.btnLoadPresetMueble.click();
     document.querySelector('.parts-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
@@ -175,7 +188,14 @@ function initCollapsibleCards() {
 }
 
 initTheme();
+initTabs();
 initCollapsibleCards();
+// Planchas del proyecto: guardar y recalcular al cambiar la tabla
+initStockUi(() => {
+    saveStateToLocalStorage();
+    markResultsStale();
+});
+[dom.inputOrderDate, dom.inputDeliveryDate].forEach(input => input?.addEventListener('change', saveStateToLocalStorage));
 initSettings();
 initPartsTable();
 initOptimize();

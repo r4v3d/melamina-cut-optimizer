@@ -42,6 +42,7 @@ export function parseImportText(text, fallbackMaterial) {
                 material: vals[4] || fallbackMaterial,
                 veta: VETA_YES.test(vals[5] || ''),
                 cantos: parseCantos(vals[6]) || [0, 0, 0, 0],
+                nota: vals[7] || '',
                 grooves: [0, 0, 0, 0]
             };
             if (!Number.isFinite(cant) && vals[2]) part.name = vals[2]; // formato Largo, Ancho, Nombre
