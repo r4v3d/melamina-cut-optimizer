@@ -10,6 +10,7 @@ import { markResultsStale } from './optimize.js';
 import { renderQuote } from './results.js';
 import { saveStateToLocalStorage } from './persistence.js';
 import { toast } from './ui-feedback.js';
+import { requirePro } from './plan.js';
 
 function rowHtml(m, i) {
     return `
@@ -25,6 +26,7 @@ function rowHtml(m, i) {
 }
 
 export function openCatalog() {
+    if (!requirePro('catalog')) return;
     const original = new Map(materialsStore.list().map(m => [m.id, m.name]));
     const list = materialsStore.list().map(m => ({ ...m }));
     const symbol = getCurrencySymbol(dom.selectMoneda.value);

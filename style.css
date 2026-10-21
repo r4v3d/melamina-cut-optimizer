@@ -1481,6 +1481,88 @@ body.light-theme .progress-ring-circle-bg {
     }
 }
 
+/* ===== Plan Gratis / Pro ===== */
+.btn-upgrade {
+    background: linear-gradient(135deg, #f97316, #eab308);
+    border: none;
+    color: #111827;
+    font-weight: 800;
+}
+
+.pro-tag,
+body:not(.is-pro) [data-pro]::after {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    line-height: 1;
+    padding: 0.15rem 0.3rem;
+    border-radius: 4px;
+    background: linear-gradient(135deg, #f97316, #eab308);
+    color: #111827;
+    vertical-align: middle;
+}
+
+body:not(.is-pro) [data-pro]::after {
+    content: 'PRO';
+    margin-left: 0.35rem;
+}
+
+body.is-pro .pro-tag { display: none; }
+
+.plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0 1rem;
+}
+
+.plan-card {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1rem;
+    background: var(--bg-input-muted);
+}
+
+.plan-card-pro { border: 2px solid var(--accent-orange); }
+
+.plan-card h4 { font-family: var(--font-display); font-size: 1.1rem; }
+
+.plan-price {
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin: 0.25rem 0;
+}
+
+.plan-price span { font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+.plan-annual { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem; }
+
+.plan-card ul { padding-left: 1.1rem; font-size: 0.875rem; line-height: 1.6; }
+
+.plan-highlight {
+    color: var(--accent-orange);
+    font-weight: 700;
+}
+
+.plan-blocked,
+.plan-active {
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.plan-blocked { background: rgba(249, 115, 22, 0.12); border: 1px solid var(--accent-orange); }
+.plan-active { background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; }
+
+.plan-subtitle { font-family: var(--font-display); margin: 0.5rem 0; }
+
+.plan-steps { padding-left: 1.2rem; font-size: 0.875rem; line-height: 1.7; margin-bottom: 1rem; }
+.plan-steps ul { padding-left: 1rem; }
+
+.plan-activate label { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.35rem; }
+.plan-activate textarea { font-family: monospace; font-size: 0.8rem; }
+
 /* ===== Barra de proyecto ===== */
 .project-bar {
     display: flex;

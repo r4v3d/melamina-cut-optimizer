@@ -21,6 +21,8 @@ import { initProjectsUi } from './projects-ui.js';
 import { initFurnitureUi } from './furniture-ui.js';
 import { initQuoteUi } from './quote-ui.js';
 import { initExportsUi } from './exports-ui.js';
+import { initPlan, onPlanChange } from './plan.js';
+import { renderQuote } from './results.js';
 import { loadStateFromLocalStorage, saveStateToLocalStorage } from './persistence.js';
 
 state.canvas = new CutMapCanvas('cut-map-canvas', {
@@ -150,6 +152,13 @@ initProjectsUi();
 initFurnitureUi();
 initQuoteUi();
 initExportsUi();
+
+// La licencia se verifica antes de la primera optimización (el catálogo y los retazos son Pro)
+await initPlan();
+onPlanChange(() => {
+    renderQuote();
+    markResultsStale();
+});
 
 loadStateFromLocalStorage();
 

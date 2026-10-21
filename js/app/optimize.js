@@ -9,6 +9,7 @@ import { readRawParts, applyRowWarnings } from './parts-table.js';
 import { onNewResults } from './results.js';
 import { toast, confirmDialog } from './ui-feedback.js';
 import { materialsStore, retazosStore } from './store.js';
+import { isPro } from './plan.js';
 
 const optimizeBtnDefaultHtml = dom.btnOptimize.innerHTML;
 let optimizeGeneration = 0;
@@ -32,11 +33,12 @@ function runOnMainThread(config, rawParts, options) {
     return new CutOptimizer(config).optimize(rawParts, options);
 }
 
-// Plancha por material (catálogo) y retazos disponibles (si se pidió usarlos)
+// Plancha por material (catálogo) y retazos disponibles (si se pidió usarlos). Ambos son Pro.
 function readOptimizeOptions() {
+    const pro = isPro();
     return {
-        materials: materialsStore.optimizerMap(),
-        stock: dom.checkUsarRetazos.checked ? retazosStore.stockMap() : {}
+        materials: pro ? materialsStore.optimizerMap() : {},
+        stock: pro && dom.checkUsarRetazos.checked ? retazosStore.stockMap() : {}
     };
 }
 

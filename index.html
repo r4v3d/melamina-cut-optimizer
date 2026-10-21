@@ -32,6 +32,7 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button id="btn-plan" class="btn btn-primary btn-upgrade">Pasar a Pro</button>
                 <button id="btn-theme-toggle" class="btn btn-secondary" title="Cambiar de Tema" aria-label="Cambiar tema claro/oscuro" style="padding: 0.625rem 0.75rem;">
                     <svg id="theme-toggle-dark-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     <svg id="theme-toggle-light-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="display: none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -168,7 +169,7 @@
 
                     <div class="form-group inline-checkbox">
                         <input type="checkbox" id="check-usar-retazos">
-                        <label for="check-usar-retazos">Usar retazos del inventario primero</label>
+                        <label for="check-usar-retazos">Usar retazos del inventario primero <span class="pro-tag">PRO</span></label>
                     </div>
 
                     <div class="form-group inline-checkbox">
@@ -313,8 +314,8 @@
                     </div>
                     <div class="project-actions">
                         <button id="btn-projects" class="btn btn-secondary btn-sm">Proyectos</button>
-                        <button id="btn-catalog" class="btn btn-secondary btn-sm">Catálogo de materiales</button>
-                        <button id="btn-retazos" class="btn btn-secondary btn-sm">Retazos</button>
+                        <button id="btn-catalog" class="btn btn-secondary btn-sm" data-pro>Catálogo de materiales</button>
+                        <button id="btn-retazos" class="btn btn-secondary btn-sm" data-pro>Retazos</button>
                         <button id="btn-taller-profile" class="btn btn-secondary btn-sm">Mi taller</button>
                     </div>
                 </div>
@@ -331,7 +332,7 @@
                                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                                 Importar Excel/CSV
                             </button>
-                            <button id="btn-furniture-builder" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 6px;">Mueble por medidas</button>
+                            <button id="btn-furniture-builder" data-pro class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 6px;">Mueble por medidas</button>
                             <label for="select-mueble-preset">Cargar Mueble:</label>
                             <select id="select-mueble-preset" class="form-select-sm">
                                 <option value="" disabled selected>Seleccione...</option>
@@ -509,9 +510,9 @@
                                 </button>
                                 <button id="btn-quote-pdf" class="btn btn-primary btn-sm" title="Cotización para el cliente con los datos de tu taller">Cotización PDF</button>
                                 <button id="btn-share-quote" class="btn btn-secondary btn-sm" title="Enviar la cotización por WhatsApp u otra app">Compartir</button>
-                                <button id="btn-export-csv" class="btn btn-secondary btn-sm" title="Lista de corte para Excel">Lista CSV</button>
-                                <button id="btn-export-dxf" class="btn btn-secondary btn-sm" title="Plano de la plancha visible para CAD / CNC">Plano DXF</button>
-                                <button id="btn-register-inventory" class="btn btn-secondary btn-sm" title="Descuenta los retazos usados y guarda los sobrantes útiles de este corte">Registrar en inventario</button>
+                                <button id="btn-export-csv" data-pro class="btn btn-secondary btn-sm" title="Lista de corte para Excel">Lista CSV</button>
+                                <button id="btn-export-dxf" data-pro class="btn btn-secondary btn-sm" title="Plano de la plancha visible para CAD / CNC">Plano DXF</button>
+                                <button id="btn-register-inventory" data-pro class="btn btn-secondary btn-sm" title="Descuenta los retazos usados y guarda los sobrantes útiles de este corte">Registrar en inventario</button>
                             </div>
                         </div>
 

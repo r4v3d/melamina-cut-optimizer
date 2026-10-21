@@ -9,6 +9,7 @@ import { addNewRow, defaultMaterial, isTableEmpty } from './parts-table.js';
 import { saveStateToLocalStorage } from './persistence.js';
 import { runOptimization } from './optimize.js';
 import { toast } from './ui-feedback.js';
+import { requirePro } from './plan.js';
 
 function materialOptions(selected) {
     const names = new Set([defaultMaterial(), ...materialsStore.list().map(m => m.name)]);
@@ -17,6 +18,7 @@ function materialOptions(selected) {
 }
 
 export function openFurnitureBuilder() {
+    if (!requirePro('furniture')) return;
     const fondoDefault = materialsStore.list().find(m => /fondo|3 ?mm/i.test(m.name))?.name || 'MDF Fondo 3mm';
     const body = document.createElement('div');
     body.innerHTML = `
