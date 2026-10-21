@@ -553,11 +553,15 @@ export class CutMapCanvas {
             ctx.strokeRect(r.x, r.y, r.w, r.h);
             ctx.setLineDash([]);
             
-            // Draw dimension labels for larger free spaces
-            if (r.w > 60 && r.h > 40) {
+            // Medidas del sobrante (en pantalla con letra de tamaño fijo en píxeles)
+            const screenFont = 11 / scale;
+            const showLabel = isPrintMode
+                ? (r.w > 60 && r.h > 40)
+                : (r.w * scale > 56 && r.h * scale > 16);
+            if (showLabel) {
                 const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
                 let fontSize = Math.min(Math.round(r.h * 0.15), Math.round(r.w * 0.08));
-                fontSize = Math.min(Math.max(fontSize, isPrintMode ? 14 : 12), 24);
+                fontSize = isPrintMode ? Math.min(Math.max(fontSize, 14), 24) : screenFont;
                 const leftoverUse = CutOptimizer.isUsefulLeftover(r) ? 'guardar' : 'leña';
                 
                 ctx.fillStyle = isPrintMode ? '#000000' : (isLightTheme ? '#475569' : 'rgba(255, 255, 255, 0.85)');
@@ -620,7 +624,7 @@ export class CutMapCanvas {
             }
 
             // Draw part label (Name & Dimensions)
-            this.drawPartLabels(ctx, p, isPrintMode, isHovered);
+            this.drawPartLabels(ctx, p, isPrintMode, isHovered, scale);
             if (p.veta) this.drawGrainArrow(ctx, p, isPrintMode);
             ctx.restore();
         }
@@ -654,7 +658,7 @@ export class CutMapCanvas {
 
             // En el plano impreso las pasadas de refilado van sin etiqueta (están en la lista de pasos)
             if ((isPrintMode && cut.kind !== 'refilado') || isActive) {
-                this.drawFenceLabel(ctx, cut, isPrintMode, isActive);
+                this.drawFenceLabel(ctx, cut, isPrintMode, isActive, scale);
             }
             ctx.restore();
         });
@@ -666,24 +670,28 @@ export class CutMapCanvas {
         return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
     }
 
-    drawFenceLabel(ctx, cut, isPrintMode, isActive) {
+    drawFenceLabel(ctx, cut, isPrintMode, isActive, scale = 1) {
         const mx = (cut.x1 + cut.x2) / 2;
         const my = (cut.y1 + cut.y2) / 2;
         const fence = Math.round((cut.fenceMm || 0) * 10) / 10;
         const text = cut.kind === 'refilado'
             ? (cut.fenceMm ? `refilado · tope ${fence} mm` : 'refilado')
             : `tope ${fence} mm`;
+        // En pantalla: tamaños en píxeles fijos (u = 1 px expresado en mm del plano)
+        const u = isPrintMode ? 1 : 1 / scale;
+        const fontSize = isPrintMode ? 18 : 13 * u;
         ctx.save();
-        ctx.font = `bold ${isPrintMode ? 18 : 22}px 'Plus Jakarta Sans', sans-serif`;
+        ctx.font = `bold ${fontSize}px 'Plus Jakarta Sans', sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const pad = 8;
+        const pad = (isPrintMode ? 8 : 6) * u;
+        const boxH = isPrintMode ? 24 : 20 * u;
         const tw = ctx.measureText(text).width;
         const isH = Math.abs(cut.y2 - cut.y1) < 1;
-        const ox = isH ? 0 : 28;
-        const oy = isH ? -22 : 0;
+        const ox = isH ? 0 : (isPrintMode ? 28 : tw / 2 + 12 * u);
+        const oy = isH ? (isPrintMode ? -22 : -16 * u) : 0;
         ctx.fillStyle = isActive ? '#eab308' : '#000000';
-        ctx.fillRect(mx + ox - tw / 2 - pad, my + oy - 12, tw + pad * 2, 24);
+        ctx.fillRect(mx + ox - tw / 2 - pad, my + oy - boxH / 2, tw + pad * 2, boxH);
         ctx.fillStyle = isActive ? '#0f172a' : '#ffffff';
         ctx.fillText(text, mx + ox, my + oy);
         ctx.restore();
@@ -769,190 +777,104 @@ export class CutMapCanvas {
         drawEdge(p.x + p.w, p.y, p.x + p.w, p.y + p.h, cRight, lRight);
     }
 
-    // Helper to draw labels (Text) inside the pieces
-    drawPartLabels(ctx, p, isPrintMode, isHovered) {
-        const padding = 6;
-        const textMaxWidth = p.w - padding * 2;
-        
+    // Nombre y medidas dentro de cada pieza. En pantalla la letra mide entre 10 y 16 px reales;
+    // si no entra, se muestra solo el nombre, solo las medidas o el número de pieza.
+    drawPartLabels(ctx, p, isPrintMode, isHovered, scale = 1) {
         const fontStack = "'Plus Jakarta Sans', 'Outfit', sans-serif";
-        ctx.textBaseline = 'middle';
-        
-        const isLightTheme = document.body.classList.contains('light-theme');
-        const partNum = p.originalIndex !== undefined ? `#${p.originalIndex + 1}` : '';
-        const nameText = isPrintMode && partNum ? `${partNum} ${p.name}` : p.name;
-        const cutText = `${Math.round(p.w * 10) / 10} × ${Math.round(p.h * 10) / 10}`;
-        const dimText = isPrintMode
-            ? `corte ${cutText}`
-            : `${p.largoNominal} x ${p.anchoNominal}`;
-
         if (isPrintMode) {
             this.drawShopPartLabel(ctx, p, fontStack);
             return;
         }
 
-        // Check if piece is vertical
-        const isVertical = p.h > p.w * 1.3;
-        
-        if (isVertical) {
-            ctx.save();
-            ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
-            ctx.rotate(-Math.PI / 2); // Rotate 270 degrees (vertical running from bottom to top)
-            
-            const vertTextMaxWidth = p.h - padding * 2;
-            if (vertTextMaxWidth <= 0) {
-                ctx.restore();
-                return;
-            }
-            
-            // Check if we can fit 2 stacked lines in rotated context!
-            if (p.w >= 60 && p.h >= 130) {
-                let fontSize = Math.min(Math.round(p.w * 0.15), Math.round(p.h * 0.15));
-                fontSize = Math.min(Math.max(fontSize, 12), 32);
-                
-                ctx.textAlign = 'center';
-                
-                // Name
-                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-                ctx.fillText(nameText, 0, -fontSize * 0.55, vertTextMaxWidth);
-                
-                // Dimensions
-                ctx.font = `600 ${Math.max(fontSize - 1, 11)}px ${fontStack}`;
-                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc';
-                ctx.fillText(dimText, 0, fontSize * 0.55, vertTextMaxWidth);
-            } 
-            // Otherwise draw single line vertically
-            else {
-                const separator = " - ";
-                let fontSize = Math.min(Math.round(p.w * 0.32), 26);
-                fontSize = Math.max(fontSize, 10);
-                
-                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                let nameWidth = ctx.measureText(nameText).width;
-                let sepWidth = ctx.measureText(separator).width;
-                ctx.font = `600 ${fontSize}px ${fontStack}`;
-                let dimWidth = ctx.measureText(dimText).width;
-                let totalWidth = nameWidth + sepWidth + dimWidth;
-                
-                if (totalWidth > vertTextMaxWidth) {
-                    fontSize = Math.floor(fontSize * (vertTextMaxWidth / totalWidth));
-                    ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                    nameWidth = ctx.measureText(nameText).width;
-                    sepWidth = ctx.measureText(separator).width;
-                    ctx.font = `600 ${fontSize}px ${fontStack}`;
-                    dimWidth = ctx.measureText(dimText).width;
-                    totalWidth = nameWidth + sepWidth + dimWidth;
-                }
-                
-                if (fontSize < 9 || p.h < 50) {
-                    // Draw fallback index vertically
-                    const indexFontSize = Math.min(Math.max(Math.round(p.w * 0.45), 8), 14);
-                    ctx.font = `bold ${indexFontSize}px ${fontStack}`;
-                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(`${p.originalIndex !== undefined ? p.originalIndex + 1 : ''}${p.rotated ? 'R' : ''}`, 0, 0, vertTextMaxWidth);
-                } else {
-                    let startX = -totalWidth / 2;
-                    
-                    // Name
-                    ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-                    ctx.textAlign = 'left';
-                    ctx.fillText(nameText, startX, 0);
-                    
-                    // Separator
-                    ctx.fillStyle = isPrintMode ? '#64748b' : '#94a3b8';
-                    ctx.fillText(separator, startX + nameWidth, 0);
-                    
-                    // Dimensions
-                    ctx.font = `600 ${fontSize}px ${fontStack}`;
-                    ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc';
-                    ctx.fillText(dimText, startX + nameWidth + sepWidth, 0);
-                }
-            }
-            
-            ctx.restore();
-            return;
-        }
+        const isLightTheme = document.body.classList.contains('light-theme');
+        const nameColor = isLightTheme ? '#0f172a' : '#ffffff';
+        const dimColor = isLightTheme ? '#0f766e' : '#a5f3fc';
+        const vertical = p.h > p.w * 1.3;
+        const along = vertical ? p.h : p.w;   // dirección en la que corre el texto
+        const across = vertical ? p.w : p.h;
+        const u = 1 / scale;                  // 1 px de pantalla en mm del plano
+        const maxW = along - 8 * u;
+        if (maxW <= 0 || across * scale < 9) return;
 
-        if (textMaxWidth <= 0) return;
-        
-        // 1. Tall and wide pieces: 2 stacked lines (Name and Nominal Dimensions in cyan/teal)
-        if (p.h >= 130 && p.w >= 130) {
-            let fontSize = Math.min(Math.round(p.h * 0.15), Math.round(p.w * 0.15));
-            fontSize = Math.min(Math.max(fontSize, 14), 75);
-            
-            ctx.textAlign = 'center';
-            
-            // Draw Name (Line 1)
-            ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-            ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-            ctx.fillText(nameText, p.x + p.w / 2, p.y + p.h / 2 - fontSize * 0.55, textMaxWidth);
-            
-            // Draw Nominal Dimensions (Line 2)
-            ctx.font = `600 ${Math.max(fontSize - 1, 11)}px ${fontStack}`;
-            ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc'; // dark green/teal in print/light, cyan in dark mode
-            ctx.fillText(dimText, p.x + p.w / 2, p.y + p.h / 2 + fontSize * 0.55, textMaxWidth);
-        } 
-        // 2. Short/Narrow pieces: Single line with name and dimensions side by side
-        else {
-            const separator = " - ";
-            
-            // Calculate initial font size based on height
-            let fontSize = Math.min(Math.round(p.h * 0.32), 26);
-            fontSize = Math.max(fontSize, 12);
-            
-            ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-            let nameWidth = ctx.measureText(nameText).width;
-            let sepWidth = ctx.measureText(separator).width;
-            
-            ctx.font = `600 ${fontSize}px ${fontStack}`;
-            let dimWidth = ctx.measureText(dimText).width;
-            
-            let totalWidth = nameWidth + sepWidth + dimWidth;
-            
-            // Check if it fits horizontally. If not, scale down fontSize
-            if (totalWidth > textMaxWidth) {
-                fontSize = Math.floor(fontSize * (textMaxWidth / totalWidth));
-                
-                // Re-measure with scaled fontSize
-                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                nameWidth = ctx.measureText(nameText).width;
-                sepWidth = ctx.measureText(separator).width;
-                
-                ctx.font = `600 ${fontSize}px ${fontStack}`;
-                dimWidth = ctx.measureText(dimText).width;
-                
-                totalWidth = nameWidth + sepWidth + dimWidth;
+        const px = Math.max(10, Math.min(16, across * scale * 0.3));
+        const fs = px * u;
+        const name = p.name || '';
+        const dims = `${p.largoNominal} × ${p.anchoNominal}`;
+        const num = p.originalIndex !== undefined ? `#${p.originalIndex + 1}${p.rotated ? ' ↻' : ''}` : '';
+        const width = (text, weight, size = fs) => {
+            ctx.font = `${weight} ${size}px ${fontStack}`;
+            return ctx.measureText(text).width;
+        };
+        const nameWeight = isHovered ? '700' : '600';
+
+        ctx.save();
+        ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+        if (vertical) ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Tamaño (px de pantalla, hasta maxPx) con el que el texto entra a lo ancho
+        const fitPx = (text, weight, maxPx = px) =>
+            Math.min(maxPx, maxPx * maxW / Math.max(1, width(text, weight, maxPx * u)));
+        const rowsPx = across * scale; // espacio disponible a lo alto, en px
+        const drawLines = (lines, sizePx) => {
+            const size = sizePx * u;
+            const step = size * 1.15;
+            let y = -step * (lines.length - 1) / 2;
+            for (const line of lines) {
+                ctx.font = `${line.weight} ${size}px ${fontStack}`;
+                ctx.fillStyle = line.color;
+                ctx.fillText(line.text, 0, y);
+                y += step;
             }
-            
-            // If even at minimum font size it doesn't fit or piece is extremely tiny/narrow, fall back to index number
-            if (fontSize < 10 || p.h < 15 || p.w < 50) {
-                const indexFontSize = Math.min(Math.max(Math.round(p.h * 0.45), 8), 14);
-                ctx.font = `bold ${indexFontSize}px ${fontStack}`;
-                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-                ctx.textAlign = 'center';
-                ctx.fillText(`${p.originalIndex !== undefined ? p.originalIndex + 1 : ''}${p.rotated ? 'R' : ''}`, p.x + p.w / 2, p.y + p.h / 2, textMaxWidth);
+        };
+        const nameLine = text => ({ text, weight: nameWeight, color: nameColor });
+        const dimsLine = { text: dims, weight: '500', color: dimColor };
+
+        let drawn = false;
+        // 1) Nombre en una línea (achicado hasta 10 px), con medidas debajo o al lado si caben
+        const namePx = name ? fitPx(name, nameWeight) : 0;
+        if (namePx >= 10) {
+            const combined = `${name} · ${dims}`;
+            if (rowsPx >= namePx * 2.6 && fitPx(dims, '500', namePx) >= namePx - 0.01) {
+                drawLines([nameLine(name), dimsLine], namePx);
+            } else if (fitPx(combined, nameWeight, namePx) >= namePx - 0.01) {
+                drawLines([nameLine(combined)], namePx);
             } else {
-                // Draw side-by-side text centered horizontally and vertically
-                let startX = p.x + p.w / 2 - totalWidth / 2;
-                
-                // Name
-                ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px ${fontStack}`;
-                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f172a' : '#ffffff';
-                ctx.textAlign = 'left';
-                ctx.fillText(nameText, startX, p.y + p.h / 2);
-                
-                // Separator
-                ctx.fillStyle = isPrintMode ? '#64748b' : '#94a3b8';
-                ctx.fillText(separator, startX + nameWidth, p.y + p.h / 2);
-                
-                // Dimensions (cyan / teal)
-                ctx.font = `600 ${fontSize}px ${fontStack}`;
-                ctx.fillStyle = (isPrintMode || isLightTheme) ? '#0f766e' : '#a5f3fc';
-                ctx.fillText(dimText, startX + nameWidth + sepWidth, p.y + p.h / 2);
+                drawLines([nameLine(name)], namePx);
+            }
+            drawn = true;
+        }
+        // 2) Nombre partido en dos líneas (piezas angostas con nombres largos)
+        if (!drawn && name.includes(' ')) {
+            const words = name.split(' ');
+            let best = null;
+            for (let i = 1; i < words.length; i++) {
+                const l1 = words.slice(0, i).join(' ');
+                const l2 = words.slice(i).join(' ');
+                const size = Math.min(fitPx(l1, nameWeight), fitPx(l2, nameWeight));
+                if (!best || size > best.size) best = { l1, l2, size };
+            }
+            if (best && best.size >= 10 && rowsPx >= best.size * 2.4) {
+                const lines = [nameLine(best.l1), nameLine(best.l2)];
+                if (rowsPx >= best.size * 3.7 && fitPx(dims, '500', best.size) >= best.size - 0.01) lines.push(dimsLine);
+                drawLines(lines, best.size);
+                drawn = true;
             }
         }
+        // 3) Solo medidas
+        if (!drawn) {
+            const dimsPx = fitPx(dims, '500');
+            if (dimsPx >= 10) {
+                drawLines([dimsLine], dimsPx);
+                drawn = true;
+            }
+        }
+        // 4) Último recurso: número de pieza (mínimo 8 px)
+        if (!drawn && num) {
+            drawLines([{ text: num, weight: '700', color: nameColor }], Math.max(8, fitPx(num, '700')));
+        }
+        ctx.restore();
     }
 
     drawShopPartLabel(ctx, p, fontStack) {

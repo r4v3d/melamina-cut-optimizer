@@ -78,7 +78,7 @@ export function renderCutSequence(sheet) {
         li.style.cursor = 'pointer';
         li.style.transition = 'all 0.15s';
         if (cut.kind === 'refilado') li.classList.add('seq-refilado');
-        li.innerHTML = `<strong>Paso ${cut.seq || idx + 1} (${cutKindLabel(cut)}):</strong> ${escapeHtml(cut.desc)}`;
+        li.innerHTML = `<strong>Paso ${cut.seq || idx + 1} · ${cutKindLabel(cut)}</strong> — ${escapeHtml(cut.desc)}`;
         li.addEventListener('click', () => {
             state.activeCutStepIndex = idx;
             updateCutWizardUI();
@@ -116,7 +116,7 @@ export function updateCutWizardUI() {
         dom.lblSeqStep.textContent = `Corte ${idx + 1} de ${sheet.cuts.length}`;
         if (dom.wizardOverlay) {
             dom.wizardOverlay.hidden = false;
-            dom.wizardOverlayText.textContent = cut.desc || `Tope a ${cut.fenceMm} mm`;
+            dom.wizardOverlayText.textContent = `${cutKindLabel(cut)}: ${cut.desc || `tope a ${cut.fenceMm} mm`}`;
         }
     }
 

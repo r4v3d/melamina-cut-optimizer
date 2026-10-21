@@ -1481,6 +1481,163 @@ body.light-theme .progress-ring-circle-bg {
     }
 }
 
+/* ===== Guía de uso y pasos numerados ===== */
+.step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--accent-orange);
+    color: #111827;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.welcome-card { border: 1px solid var(--accent-orange); }
+.welcome-card[hidden] { display: none; }
+
+.welcome-steps {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.welcome-steps li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.welcome-steps strong { color: var(--text-primary); }
+.welcome-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.field-hint {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
+.field-hint-check { margin: -0.55rem 0 0.9rem 1.6rem; }
+
+details.advanced-options {
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+}
+
+details.advanced-options > summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    list-style-position: inside;
+}
+
+details.advanced-options[open] > summary { color: var(--text-primary); }
+
+/* ===== Tabla de piezas: ayuda y recálculo automático ===== */
+.parts-help {
+    margin: 0.75rem 0 0.25rem;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.legend-chip {
+    display: inline-block;
+    min-width: 1.4rem;
+    padding: 0 0.3rem;
+    border-radius: 4px;
+    border: 1px solid;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.legend-d { color: var(--accent-teal); border-color: var(--accent-teal); background: rgba(6, 182, 212, 0.15); }
+.legend-g { color: var(--accent-orange); border-color: var(--accent-orange); background: rgba(249, 115, 22, 0.15); }
+
+.table-actions { flex-wrap: wrap; gap: 0.75rem; }
+
+.auto-optimize {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-right: auto;
+    cursor: pointer;
+}
+
+/* Anchos de columna: el nombre es lo más importante; largo y ancho deben verse completos */
+@media (min-width: 641px) {
+    .parts-table th,
+    .parts-table td { padding-left: 0.4rem; padding-right: 0.4rem; }
+    .parts-table tbody td:nth-child(2) { min-width: 145px; }
+    .parts-table .part-material { max-width: 118px; }
+    .parts-table .row-actions { flex-direction: column; gap: 0.15rem; }
+    .parts-table tbody td:nth-child(3) { width: 48px; }
+    .parts-table .part-color { width: 36px; min-width: 36px; padding: 2px; }
+    .parts-table tbody td:nth-child(5),
+    .parts-table tbody td:nth-child(6) { min-width: 78px; }
+    .parts-table thead th:nth-child(7),
+    .parts-table tbody td:nth-child(7) { width: 72px; max-width: 80px; }
+}
+
+/* ===== Menú "Más" de acciones del mapa ===== */
+.map-actions { flex-wrap: wrap; align-items: center; }
+
+.actions-menu { position: relative; display: inline-block; }
+
+.actions-menu > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.actions-menu > summary::-webkit-details-marker { display: none; }
+
+.actions-menu-list {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 60;
+    min-width: 270px;
+    max-width: calc(100vw - 2rem);
+    display: flex;
+    flex-direction: column;
+    padding: 0.35rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    box-shadow: var(--card-shadow);
+}
+
+.actions-menu-item {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.actions-menu-item:hover,
+.actions-menu-item:focus-visible { background: rgba(249, 115, 22, 0.12); }
+
 /* ===== Plan Gratis / Pro ===== */
 .btn-upgrade {
     background: linear-gradient(135deg, #f97316, #eab308);

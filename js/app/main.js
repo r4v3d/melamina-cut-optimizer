@@ -31,7 +31,8 @@ state.canvas = new CutMapCanvas('cut-map-canvas', {
     onHoverPart: part => highlightRow(part ? part.rowId : null)
 });
 
-// Presets de plancha
+// Presets de plancha ("Personalizada" cuando las medidas se escriben a mano)
+dom.selectPlanchaPreset.appendChild(new Option('Personalizada (medidas a mano)', ''));
 PLANCHA_PRESETS.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
@@ -46,6 +47,42 @@ dom.selectPlanchaPreset.addEventListener('change', (e) => {
     dom.selectEspesor.value = selected.espesor;
     dom.inputMaterial.value = selected.material;
     saveStateToLocalStorage();
+});
+[dom.inputLargo, dom.inputAncho].forEach(input => {
+    input.addEventListener('input', () => { dom.selectPlanchaPreset.value = ''; });
+});
+
+// Guía "Cómo empezar": se muestra la primera vez y con el botón "¿Cómo se usa?"
+const WELCOME_KEY = 'melaminacut_welcome_seen';
+const welcomeCard = document.getElementById('welcome-card');
+function showWelcome(show) {
+    if (!welcomeCard) return;
+    welcomeCard.hidden = !show;
+    if (show) welcomeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function dismissWelcome() {
+    showWelcome(false);
+    try { localStorage.setItem(WELCOME_KEY, '1'); } catch (e) { /* sin almacenamiento */ }
+}
+document.getElementById('btn-help')?.addEventListener('click', () => showWelcome(true));
+document.getElementById('btn-welcome-close')?.addEventListener('click', dismissWelcome);
+document.getElementById('btn-welcome-example')?.addEventListener('click', () => {
+    dismissWelcome();
+    dom.btnLoadPresetMueble.click();
+    document.querySelector('.parts-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+try {
+    if (!localStorage.getItem(WELCOME_KEY) && welcomeCard) welcomeCard.hidden = false;
+} catch (e) { /* sin almacenamiento */ }
+
+// Menú "Más": se cierra al elegir una opción o al hacer clic fuera
+document.querySelectorAll('.actions-menu').forEach(menu => {
+    menu.addEventListener('click', (e) => {
+        if (e.target.closest('.actions-menu-item')) menu.open = false;
+    });
+    document.addEventListener('click', (e) => {
+        if (menu.open && !menu.contains(e.target)) menu.open = false;
+    });
 });
 
 // Limpiar Todo se aplica al instante y se puede deshacer desde el aviso
@@ -125,7 +162,8 @@ function initCollapsibleCards() {
             body.hidden = !open;
             card.classList.toggle('is-collapsed', !open);
         };
-        setOpen(saved[key] !== false);
+        // Abierta salvo que el usuario la cierre (o la tarjeta venga plegada por defecto)
+        setOpen(key in saved ? saved[key] !== false : !card.hasAttribute('data-collapsed-default'));
         btn.addEventListener('click', () => {
             const open = btn.getAttribute('aria-expanded') !== 'true';
             setOpen(open);

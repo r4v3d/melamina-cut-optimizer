@@ -17,8 +17,21 @@ let worker = null;
 let cancelPending = null; // rechaza la promesa de la optimización en curso al reemplazarla
 let workerUnavailable = false;
 
+const AUTO_KEY = 'melaminacut_auto_optimize';
+const AUTO_DELAY_MS = 900;
+let autoTimer = null;
+
+export function isAutoOptimize() {
+    return dom.checkAutoOptimize ? dom.checkAutoOptimize.checked : false;
+}
+
+// Algo cambió: avisa que el resultado quedó viejo y, si está activado, recalcula solo
 export function markResultsStale() {
     if (state.results && dom.resultsStaleBanner) dom.resultsStaleBanner.hidden = false;
+    if (isAutoOptimize()) {
+        clearTimeout(autoTimer);
+        autoTimer = setTimeout(() => runOptimization({ silent: true }), AUTO_DELAY_MS);
+    }
 }
 
 async function confirmWorkshopParams() {
@@ -104,22 +117,31 @@ function setBusy(busy, progress = 0) {
         : optimizeBtnDefaultHtml;
 }
 
-export async function runOptimization() {
+// silent: recálculo automático; no muestra avisos ni pide confirmaciones (si falta algo, espera)
+export async function runOptimization({ silent = false } = {}) {
+    clearTimeout(autoTimer);
     const rawParts = readRawParts();
     if (rawParts.length === 0) {
-        toast('Ingrese al menos una pieza con largo, ancho y cantidad mayores a cero.', { type: 'warn' });
+        if (!silent) toast('Ingrese al menos una pieza con largo, ancho y cantidad mayores a cero.', { type: 'warn' });
         return;
     }
 
     const invalid = validateWorkshopParams();
     if (invalid.length) {
-        toast(`Revise antes de optimizar: ${invalid.map(i => i.label).join(', ')}.`, { type: 'error' });
-        invalid[0].input.focus();
+        if (!silent) {
+            toast(`Revise antes de optimizar: ${invalid.map(i => i.label).join(', ')}.`, { type: 'error' });
+            invalid[0].input.focus();
+        }
         return;
     }
 
     applyRowWarnings();
-    if (!await confirmWorkshopParams()) return;
+    if (silent) {
+        // Valores fuera de lo común: no recalcular solo, que el usuario confirme con el botón
+        if (num(dom.inputSierra.value, 0) > 8 || num(dom.inputRefilado.value, 0) > 20) return;
+    } else if (!await confirmWorkshopParams()) {
+        return;
+    }
 
     const config = readOptimizerConfig();
     const options = readOptimizeOptions();
@@ -146,5 +168,14 @@ export async function runOptimization() {
 }
 
 export function initOptimize() {
-    dom.btnOptimize.addEventListener('click', runOptimization);
+    dom.btnOptimize.addEventListener('click', () => runOptimization());
+    if (dom.checkAutoOptimize) {
+        try {
+            dom.checkAutoOptimize.checked = localStorage.getItem(AUTO_KEY) !== '0';
+        } catch (e) { /* sin almacenamiento: queda activado */ }
+        dom.checkAutoOptimize.addEventListener('change', () => {
+            try { localStorage.setItem(AUTO_KEY, dom.checkAutoOptimize.checked ? '1' : '0'); } catch (e) { /* sin almacenamiento */ }
+            if (dom.checkAutoOptimize.checked) markResultsStale();
+        });
+    }
 }

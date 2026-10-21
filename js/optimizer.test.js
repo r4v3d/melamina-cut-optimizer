@@ -160,7 +160,7 @@ test('secuencia padre → hijo: ningún traza ocurre antes de su raja', () => {
     const pieceCuts = sheet.cuts.filter(c => c.kind !== 'refilado');
     assert.ok(pieceCuts.length >= 1);
     assert.strictEqual(pieceCuts[0].kind, 'raja', 'primer corte tras el refilado debe ser raja de tira');
-    assert.ok(pieceCuts[0].desc.includes('tope'), pieceCuts[0].desc);
+    assert.ok(/tope/i.test(pieceCuts[0].desc), pieceCuts[0].desc);
     assert.ok(pieceCuts.every(c => c.seq && c.desc && c.fenceMm > 0));
 
     const produced = new Set(['sheet']);
@@ -340,7 +340,7 @@ test('girar a mano: se regenera secuencia y sobrantes sin pisar piezas', () => {
     }
     const pieceCuts = sheet.cuts.filter(c => c.kind !== 'refilado');
     assert.strictEqual(pieceCuts.length, 2);
-    assert.ok(pieceCuts.every(c => c.desc && c.desc.includes('tope')));
+    assert.ok(pieceCuts.every(c => c.desc && /tope/i.test(c.desc)));
 });
 
 test('distribución no guillotinable (molinete): secuencia vencida y espacio libre correcto', () => {
