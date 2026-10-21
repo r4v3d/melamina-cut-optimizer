@@ -1,5 +1,8 @@
 // Ventana modal genérica (usa <dialog> nativo: foco atrapado y Escape para cerrar)
 
+import { isNativeApp, shareNativeFile } from './native.js';
+import { toast } from './ui-feedback.js';
+
 /**
  * openModal({ title, body, actions, wide })
  *  body: HTMLElement o texto HTML
@@ -68,8 +71,16 @@ export function openModal({ title, body, actions = [], wide = false, onClose = n
 }
 
 // Descarga un texto o Blob como archivo generado por la app
+// (en la app Android abre "Compartir" para guardarlo en Archivos/Drive o enviarlo)
 export function downloadFile(filename, data, mime = 'text/plain;charset=utf-8') {
     const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+    if (isNativeApp) {
+        shareNativeFile(filename, blob).catch(err => {
+            console.error(err);
+            toast('No se pudo guardar el archivo.', { type: 'error' });
+        });
+        return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

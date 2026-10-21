@@ -6,6 +6,7 @@ import { LICENSE_PUBLIC_KEY } from '../license-key.js';
 import { PLAN_CONFIG, PRO_FEATURES } from './plan-config.js';
 import { openModal } from './modal.js';
 import { toast, confirmDialog } from './ui-feedback.js';
+import { openExternal } from './native.js';
 
 const LICENSE_STORAGE = 'melaminacut_license';
 const RENEW_WARNING_DAYS = 5;
@@ -143,7 +144,7 @@ export function openUpgrade(featureKey = null) {
         const act = e.target.dataset.act;
         if (act === 'whatsapp') {
             const text = `Hola, quiero activar MelaminaCut Pro (${c.moneda} ${c.precioMensual}/mes o ${c.moneda} ${c.precioAnual}/año). Adjunto el comprobante de pago. Mi nombre / taller: `;
-            window.open(`https://wa.me/${c.whatsappVentas.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+            openExternal(`https://wa.me/${c.whatsappVentas.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`);
         } else if (act === 'remove') {
             const ok = await confirmDialog('Se quitará la licencia de este equipo. Podrás volver a activarla con el mismo código.', { title: 'Quitar licencia', okLabel: 'Quitar' });
             if (!ok) return;

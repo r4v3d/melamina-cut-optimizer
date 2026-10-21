@@ -1,7 +1,7 @@
 // Service worker de MelaminaCut: permite usar la app sin conexión.
 // Estrategia: primero la red (siempre la versión más reciente) y, sin conexión, la copia en caché.
 
-const CACHE = 'melaminacut-v6';
+const CACHE = 'melaminacut-v7';
 
 const APP_SHELL = [
     './',
@@ -53,7 +53,8 @@ const APP_SHELL = [
     'js/license.js',
     'js/license-key.js',
     'js/app/plan.js',
-    'js/app/plan-config.js'
+    'js/app/plan-config.js',
+    'js/app/native.js'
 ];
 
 self.addEventListener('install', (event) => {

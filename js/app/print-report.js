@@ -6,6 +6,7 @@ import { escapeHtml, cantosText, groovesText } from '../utils.js';
 import { readGrooveSpec } from './settings.js';
 import { anySequenceStale, cutKindLabel } from './sequence.js';
 import { toast } from './ui-feedback.js';
+import { isNativeApp } from './native.js';
 
 const fmt1 = n => Math.round(n * 10) / 10;
 
@@ -111,6 +112,11 @@ export function initPrintReport() {
     dom.btnPrintReport.addEventListener('click', () => {
         if (anySequenceStale()) {
             toast('Hay planchas con la secuencia de cortes desactualizada. Reoptimice antes de cortar.', { type: 'warn' });
+        }
+        if (isNativeApp) {
+            // El WebView de Android no imprime: se genera el PDF, que sí se puede imprimir o enviar
+            import('./export-pdf.js').then(m => m.exportPdf());
+            return;
         }
         generatePrintReport();
         window.print();

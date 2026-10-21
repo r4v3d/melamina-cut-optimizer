@@ -2,6 +2,7 @@
 
 import { escapeHtml, hexToRgba } from './utils.js';
 import { CutOptimizer } from './optimizer.js';
+import { isNativeApp, shareNativeFile } from './app/native.js';
 
 export class CutMapCanvas {
     // options.onEdit({ type: 'rotate' | 'remove', part }) se llama tras una edición manual
@@ -933,9 +934,15 @@ export class CutMapCanvas {
         const url = this.getHighResDataURL(3000);
         if (!url) return;
         
+        const filename = `plano_de_corte_plancha_${this.sheet.id}.png`;
+        if (isNativeApp) {
+            fetch(url).then(r => r.blob()).then(blob => shareNativeFile(filename, blob))
+                .catch(err => console.error('No se pudo guardar la imagen:', err));
+            return;
+        }
         const a = document.createElement('a');
         a.href = url;
-        a.download = `plano_de_corte_plancha_${this.sheet.id}.png`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

@@ -24,6 +24,7 @@ import { initExportsUi } from './exports-ui.js';
 import { initPlan, onPlanChange } from './plan.js';
 import { renderQuote } from './results.js';
 import { loadStateFromLocalStorage, saveStateToLocalStorage } from './persistence.js';
+import { isNativeApp, initNative } from './native.js';
 
 state.canvas = new CutMapCanvas('cut-map-canvas', {
     onEdit: onCanvasEdit,
@@ -192,6 +193,7 @@ initQuoteUi();
 initExportsUi();
 
 // La licencia se verifica antes de la primera optimización (el catálogo y los retazos son Pro)
+initNative();
 await initPlan();
 onPlanChange(() => {
     renderQuote();
@@ -201,7 +203,8 @@ onPlanChange(() => {
 loadStateFromLocalStorage();
 
 // PWA: instalable y usable sin conexión (solo en http/https)
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+// (en la app Android los archivos ya vienen dentro del APK: no hace falta)
+if (!isNativeApp && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(err => {
             console.warn('No se pudo registrar el service worker:', err);

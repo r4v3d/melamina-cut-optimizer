@@ -11,3 +11,7 @@ Copias locales para que la app funcione sin conexión en el taller.
 Texto de la licencia OFL: https://openfontlicense.org
 
 Para actualizar jsPDF: `npm pack jspdf@<versión>` y copiar `package/dist/jspdf.umd.min.js`.
+| `capacitor/core.js` | paquete npm `@capacitor/core` (`dist/index.js`) | 8.5.3 | MIT |
+
+`capacitor/core.js` solo se carga dentro de la app Android (ver `js/app/native.js`).
+Al actualizar Capacitor: `cp node_modules/@capacitor/core/dist/index.js vendor/capacitor/core.js`.

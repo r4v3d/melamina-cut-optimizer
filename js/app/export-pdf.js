@@ -8,12 +8,13 @@ import { getRowData } from './parts-table.js';
 import { anySequenceStale, cutKindLabel } from './sequence.js';
 import { collectLabels, grooveSpecText } from './print-report.js';
 import { toast } from './ui-feedback.js';
+import { downloadFile } from './modal.js';
 
 const PAGE_W = 210;
 const MARGIN = 15;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
-function exportPdf() {
+export function exportPdf() {
     if (!state.results) {
         toast('Optimice primero para generar el PDF.', { type: 'warn' });
         return;
@@ -218,7 +219,7 @@ function exportPdf() {
 
     const active = currentSheet();
     if (active) state.canvas.setSheet(active);
-    doc.save('reporte_de_corte_melaminacut.pdf');
+    downloadFile('reporte_de_corte_melaminacut.pdf', doc.output('blob'));
 }
 
 export function initExportPdf() {
